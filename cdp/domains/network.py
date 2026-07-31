@@ -37,6 +37,7 @@ ResourceType: TypeAlias = Literal[
     "Ping",
     "CSPViolationReport",
     "Preflight",
+    "FedCM",
     "Other",
 ]
 
@@ -102,6 +103,8 @@ class ResourceTiming(TypedDict):
     workerReady: float
     workerFetchStart: float
     workerRespondWithSettled: float
+    workerRouterEvaluationStart: NotRequired[float]
+    workerCacheLookupStart: NotRequired[float]
     sendStart: float
     sendEnd: float
     pushStart: float
@@ -111,6 +114,14 @@ class ResourceTiming(TypedDict):
 
 
 ResourcePriority: TypeAlias = Literal["VeryLow", "Low", "Medium", "High", "VeryHigh"]
+
+RenderBlockingBehavior: TypeAlias = Literal[
+    "Blocking",
+    "InBodyParserBlocking",
+    "NonBlocking",
+    "NonBlockingDynamic",
+    "PotentiallyBlocking",
+]
 
 
 class PostDataEntry(TypedDict):
@@ -140,6 +151,7 @@ class Request(TypedDict):
     isLinkPreload: NotRequired[bool]
     trustTokenParams: NotRequired[TrustTokenParams]
     isSameSite: NotRequired[bool]
+    isAdRelated: NotRequired[bool]
 
 
 class SignedCertificateTimestamp(TypedDict):
@@ -181,13 +193,17 @@ BlockedReason: TypeAlias = Literal[
     "mixed-content",
     "origin",
     "inspector",
+    "integrity",
     "subresource-filter",
     "content-type",
     "coep-frame-resource-needs-coep-header",
     "coop-sandboxed-iframe-cannot-navigate-to-coop-page",
     "corp-not-same-origin",
     "corp-not-same-origin-after-defaulted-to-same-origin-by-coep",
+    "corp-not-same-origin-after-defaulted-to-same-origin-by-dip",
+    "corp-not-same-origin-after-defaulted-to-same-origin-by-coep-and-dip",
     "corp-not-same-site",
+    "sri-message-signature-mismatch",
 ]
 
 CorsError: TypeAlias = Literal[
@@ -210,21 +226,15 @@ CorsError: TypeAlias = Literal[
     "PreflightInvalidAllowCredentials",
     "PreflightMissingAllowExternal",
     "PreflightInvalidAllowExternal",
-    "PreflightMissingAllowPrivateNetwork",
-    "PreflightInvalidAllowPrivateNetwork",
     "InvalidAllowMethodsPreflightResponse",
     "InvalidAllowHeadersPreflightResponse",
     "MethodDisallowedByPreflightResponse",
     "HeaderDisallowedByPreflightResponse",
     "RedirectContainsCredentials",
-    "InsecurePrivateNetwork",
-    "InvalidPrivateNetworkAccess",
-    "UnexpectedPrivateNetworkAccess",
+    "InsecureLocalNetwork",
+    "InvalidLocalNetworkAccess",
     "NoCorsRedirectModeNotFollow",
-    "PreflightMissingPrivateNetworkAccessId",
-    "PreflightMissingPrivateNetworkAccessName",
-    "PrivateNetworkAccessPermissionUnavailable",
-    "PrivateNetworkAccessPermissionDenied",
+    "LocalNetworkAccessPermissionDenied",
 ]
 
 
@@ -257,6 +267,20 @@ AlternateProtocolUsage: TypeAlias = Literal[
     "unspecifiedReason",
 ]
 
+ServiceWorkerRouterSource: TypeAlias = Literal[
+    "network",
+    "cache",
+    "fetch-event",
+    "race-network-and-fetch-handler",
+    "race-network-and-cache",
+]
+
+
+class ServiceWorkerRouterInfo(TypedDict):
+    ruleIdMatched: NotRequired[int]
+    matchedSourceType: NotRequired[ServiceWorkerRouterSource]
+    actualSourceType: NotRequired[ServiceWorkerRouterSource]
+
 
 class Response(TypedDict):
     url: str
@@ -265,6 +289,7 @@ class Response(TypedDict):
     headers: Headers
     headersText: NotRequired[str]
     mimeType: str
+    charset: str
     requestHeaders: NotRequired[Headers]
     requestHeadersText: NotRequired[str]
     connectionReused: bool
@@ -274,6 +299,8 @@ class Response(TypedDict):
     fromDiskCache: NotRequired[bool]
     fromServiceWorker: NotRequired[bool]
     fromPrefetchCache: NotRequired[bool]
+    fromEarlyHints: NotRequired[bool]
+    serviceWorkerRouterInfo: NotRequired[ServiceWorkerRouterInfo]
     encodedDataLength: float
     timing: NotRequired[ResourceTiming]
     serviceWorkerResponseSource: NotRequired[ServiceWorkerResponseSource]
@@ -312,12 +339,19 @@ class CachedResource(TypedDict):
 
 
 class Initiator(TypedDict):
-    type: Literal["parser", "script", "preload", "SignedExchange", "preflight", "other"]
+    type: Literal[
+        "parser", "script", "preload", "SignedExchange", "preflight", "FedCM", "other"
+    ]
     stack: NotRequired[Runtime.StackTrace]
     url: NotRequired[str]
     lineNumber: NotRequired[float]
     columnNumber: NotRequired[float]
     requestId: NotRequired[RequestId]
+
+
+class CookiePartitionKey(TypedDict):
+    topLevelSite: str
+    hasCrossSiteAncestor: bool
 
 
 class Cookie(TypedDict):
@@ -332,10 +366,9 @@ class Cookie(TypedDict):
     session: bool
     sameSite: NotRequired[CookieSameSite]
     priority: CookiePriority
-    sameParty: bool
     sourceScheme: CookieSourceScheme
     sourcePort: int
-    partitionKey: NotRequired[str]
+    partitionKey: NotRequired[CookiePartitionKey]
     partitionKeyOpaque: NotRequired[bool]
 
 
@@ -346,6 +379,7 @@ SetCookieBlockedReason: TypeAlias = Literal[
     "SameSiteUnspecifiedTreatedAsLax",
     "SameSiteNoneInsecure",
     "UserPreferences",
+    "ThirdPartyPhaseout",
     "ThirdPartyBlockedInFirstPartySet",
     "SyntaxError",
     "SchemeNotSupported",
@@ -356,9 +390,9 @@ SetCookieBlockedReason: TypeAlias = Literal[
     "SchemefulSameSiteStrict",
     "SchemefulSameSiteLax",
     "SchemefulSameSiteUnspecifiedTreatedAsLax",
-    "SamePartyFromCrossPartyContext",
-    "SamePartyConflictsWithOtherAttributes",
     "NameValuePairExceedsMaxSize",
+    "DisallowedCharacter",
+    "NoCookieContent",
 ]
 
 CookieBlockedReason: TypeAlias = Literal[
@@ -370,13 +404,26 @@ CookieBlockedReason: TypeAlias = Literal[
     "SameSiteUnspecifiedTreatedAsLax",
     "SameSiteNoneInsecure",
     "UserPreferences",
+    "ThirdPartyPhaseout",
     "ThirdPartyBlockedInFirstPartySet",
     "UnknownError",
     "SchemefulSameSiteStrict",
     "SchemefulSameSiteLax",
     "SchemefulSameSiteUnspecifiedTreatedAsLax",
-    "SamePartyFromCrossPartyContext",
     "NameValuePairExceedsMaxSize",
+    "PortMismatch",
+    "SchemeMismatch",
+    "AnonymousContext",
+]
+
+CookieExemptionReason: TypeAlias = Literal[
+    "None",
+    "UserSetting",
+    "EnterprisePolicy",
+    "StorageAccess",
+    "TopLevelStorageAccess",
+    "Scheme",
+    "SameSiteNoneCookiesInSandbox",
 ]
 
 
@@ -386,9 +433,16 @@ class BlockedSetCookieWithReason(TypedDict):
     cookie: NotRequired[Cookie]
 
 
-class BlockedCookieWithReason(TypedDict):
-    blockedReasons: list[CookieBlockedReason]
+class ExemptedSetCookieWithReason(TypedDict):
+    exemptionReason: CookieExemptionReason
+    cookieLine: str
     cookie: Cookie
+
+
+class AssociatedCookie(TypedDict):
+    cookie: Cookie
+    blockedReasons: list[CookieBlockedReason]
+    exemptionReason: NotRequired[CookieExemptionReason]
 
 
 class CookieParam(TypedDict):
@@ -402,10 +456,9 @@ class CookieParam(TypedDict):
     sameSite: NotRequired[CookieSameSite]
     expires: NotRequired[TimeSinceEpoch]
     priority: NotRequired[CookiePriority]
-    sameParty: NotRequired[bool]
     sourceScheme: NotRequired[CookieSourceScheme]
     sourcePort: NotRequired[int]
-    partitionKey: NotRequired[str]
+    partitionKey: NotRequired[CookiePartitionKey]
 
 
 class AuthChallenge(TypedDict):
@@ -468,6 +521,7 @@ class SignedExchangeError(TypedDict):
 
 class SignedExchangeInfo(TypedDict):
     outerResponse: Response
+    hasExtraInfo: bool
     header: NotRequired[SignedExchangeHeader]
     securityDetails: NotRequired[SecurityDetails]
     errors: NotRequired[list[SignedExchangeError]]
@@ -475,15 +529,63 @@ class SignedExchangeInfo(TypedDict):
 
 ContentEncoding: TypeAlias = Literal["deflate", "gzip", "br", "zstd"]
 
-PrivateNetworkRequestPolicy: TypeAlias = Literal[
+
+class NetworkConditions(TypedDict):
+    urlPattern: str
+    latency: float
+    downloadThroughput: float
+    uploadThroughput: float
+    connectionType: NotRequired[ConnectionType]
+    packetLoss: NotRequired[float]
+    packetQueueLength: NotRequired[int]
+    packetReordering: NotRequired[bool]
+    offline: NotRequired[bool]
+
+
+class BlockPattern(TypedDict):
+    urlPattern: str
+    block: bool
+
+
+DirectSocketDnsQueryType: TypeAlias = Literal["ipv4", "ipv6"]
+
+
+class DirectTCPSocketOptions(TypedDict):
+    noDelay: bool
+    keepAliveDelay: NotRequired[float]
+    sendBufferSize: NotRequired[float]
+    receiveBufferSize: NotRequired[float]
+    dnsQueryType: NotRequired[DirectSocketDnsQueryType]
+
+
+class DirectUDPSocketOptions(TypedDict):
+    remoteAddr: NotRequired[str]
+    remotePort: NotRequired[int]
+    localAddr: NotRequired[str]
+    localPort: NotRequired[int]
+    dnsQueryType: NotRequired[DirectSocketDnsQueryType]
+    sendBufferSize: NotRequired[float]
+    receiveBufferSize: NotRequired[float]
+    multicastLoopback: NotRequired[bool]
+    multicastTimeToLive: NotRequired[int]
+    multicastAllowAddressSharing: NotRequired[bool]
+
+
+class DirectUDPMessage(TypedDict):
+    data: str
+    remoteAddr: NotRequired[str]
+    remotePort: NotRequired[int]
+
+
+LocalNetworkAccessRequestPolicy: TypeAlias = Literal[
     "Allow",
     "BlockFromInsecureToMorePrivate",
     "WarnFromInsecureToMorePrivate",
-    "PreflightBlock",
-    "PreflightWarn",
+    "PermissionBlock",
+    "PermissionWarn",
 ]
 
-IPAddressSpace: TypeAlias = Literal["Local", "Private", "Public", "Unknown"]
+IPAddressSpace: TypeAlias = Literal["Loopback", "Local", "Public", "Unknown"]
 
 
 class ConnectTiming(TypedDict):
@@ -493,7 +595,23 @@ class ConnectTiming(TypedDict):
 class ClientSecurityState(TypedDict):
     initiatorIsSecureContext: bool
     initiatorIPAddressSpace: IPAddressSpace
-    privateNetworkRequestPolicy: PrivateNetworkRequestPolicy
+    localNetworkAccessRequestPolicy: LocalNetworkAccessRequestPolicy
+
+
+class AdScriptIdentifier(TypedDict):
+    scriptId: Runtime.ScriptId
+    debuggerId: Runtime.UniqueDebuggerId
+    name: str
+
+
+class AdAncestry(TypedDict):
+    ancestryChain: list[AdScriptIdentifier]
+    rootScriptFilterlistRule: NotRequired[str]
+
+
+class AdProvenance(TypedDict):
+    filterlistRule: NotRequired[str]
+    adScriptAncestry: NotRequired[AdAncestry]
 
 
 CrossOriginOpenerPolicyValue: TypeAlias = Literal[
@@ -503,6 +621,7 @@ CrossOriginOpenerPolicyValue: TypeAlias = Literal[
     "UnsafeNone",
     "SameOriginPlusCoep",
     "RestrictPropertiesPlusCoep",
+    "NoopenerAllowPopups",
 ]
 
 
@@ -562,6 +681,186 @@ class ReportingApiEndpoint(TypedDict):
     groupName: str
 
 
+class DeviceBoundSessionKey(TypedDict):
+    site: str
+    id: str
+
+
+class DeviceBoundSessionWithUsage(TypedDict):
+    sessionKey: DeviceBoundSessionKey
+    usage: Literal[
+        "NotInScope",
+        "InScopeRefreshNotYetNeeded",
+        "InScopeRefreshNotAllowed",
+        "ProactiveRefreshNotPossible",
+        "ProactiveRefreshAttempted",
+        "Deferred",
+    ]
+
+
+class DeviceBoundSessionCookieCraving(TypedDict):
+    name: str
+    domain: str
+    path: str
+    secure: bool
+    httpOnly: bool
+    sameSite: NotRequired[CookieSameSite]
+
+
+class DeviceBoundSessionUrlRule(TypedDict):
+    ruleType: Literal["Exclude", "Include"]
+    hostPattern: str
+    pathPrefix: str
+
+
+class DeviceBoundSessionInclusionRules(TypedDict):
+    origin: str
+    includeSite: bool
+    urlRules: list[DeviceBoundSessionUrlRule]
+
+
+class DeviceBoundSession(TypedDict):
+    key: DeviceBoundSessionKey
+    refreshUrl: str
+    inclusionRules: DeviceBoundSessionInclusionRules
+    cookieCravings: list[DeviceBoundSessionCookieCraving]
+    expiryDate: TimeSinceEpoch
+    cachedChallenge: NotRequired[str]
+    allowedRefreshInitiators: list[str]
+
+
+DeviceBoundSessionEventId: TypeAlias = str
+
+DeviceBoundSessionFetchResult: TypeAlias = Literal[
+    "Success",
+    "SigningKeyGenerationError",
+    "AttestationKeyGenerationError",
+    "SigningError",
+    "TransientSigningError",
+    "ServerRequestedTermination",
+    "InvalidSessionId",
+    "InvalidChallenge",
+    "TooManyChallenges",
+    "InvalidFetcherUrl",
+    "InvalidRefreshUrl",
+    "TransientHttpError",
+    "ScopeOriginSameSiteMismatch",
+    "RefreshUrlSameSiteMismatch",
+    "MismatchedSessionId",
+    "MissingScope",
+    "NoCredentials",
+    "SubdomainRegistrationWellKnownUnavailable",
+    "SubdomainRegistrationUnauthorized",
+    "SubdomainRegistrationWellKnownMalformed",
+    "SessionProviderWellKnownUnavailable",
+    "RelyingPartyWellKnownUnavailable",
+    "FederatedKeyThumbprintMismatch",
+    "InvalidFederatedSessionUrl",
+    "InvalidFederatedKey",
+    "TooManyRelyingOriginLabels",
+    "BoundCookieSetForbidden",
+    "NetError",
+    "ProxyError",
+    "EmptySessionConfig",
+    "InvalidCredentialsConfig",
+    "InvalidCredentialsType",
+    "InvalidCredentialsEmptyName",
+    "InvalidCredentialsCookie",
+    "PersistentHttpError",
+    "RegistrationAttemptedChallenge",
+    "InvalidScopeOrigin",
+    "ScopeOriginContainsPath",
+    "RefreshInitiatorNotString",
+    "RefreshInitiatorInvalidHostPattern",
+    "InvalidScopeSpecification",
+    "MissingScopeSpecificationType",
+    "EmptyScopeSpecificationDomain",
+    "EmptyScopeSpecificationPath",
+    "InvalidScopeSpecificationType",
+    "InvalidScopeIncludeSite",
+    "MissingScopeIncludeSite",
+    "FederatedNotAuthorizedByProvider",
+    "FederatedNotAuthorizedByRelyingParty",
+    "SessionProviderWellKnownMalformed",
+    "SessionProviderWellKnownHasProviderOrigin",
+    "RelyingPartyWellKnownMalformed",
+    "RelyingPartyWellKnownHasRelyingOrigins",
+    "InvalidFederatedSessionProviderSessionMissing",
+    "InvalidFederatedSessionWrongProviderOrigin",
+    "InvalidCredentialsCookieCreationTime",
+    "InvalidCredentialsCookieName",
+    "InvalidCredentialsCookieParsing",
+    "InvalidCredentialsCookieUnpermittedAttribute",
+    "InvalidCredentialsCookieInvalidDomain",
+    "InvalidCredentialsCookiePrefix",
+    "InvalidScopeRulePath",
+    "InvalidScopeRuleHostPattern",
+    "ScopeRuleOriginScopedHostPatternMismatch",
+    "ScopeRuleSiteScopedHostPatternMismatch",
+    "SigningQuotaExceeded",
+    "InvalidConfigJson",
+    "InvalidFederatedSessionProviderFailedToRestoreKey",
+    "FailedToUnwrapKey",
+    "SessionDeletedDuringRefresh",
+    "CrossOriginRegistrationSiteNotIncluded",
+    "InvalidPreProvisionedKeyInitiatorMissing",
+    "PreProvisionedKeyAccessNotGranted",
+    "PreProvisionedKeyNotFound",
+]
+
+
+class DeviceBoundSessionFailedRequest(TypedDict):
+    requestUrl: str
+    netError: NotRequired[str]
+    responseError: NotRequired[int]
+    responseErrorBody: NotRequired[str]
+
+
+class CreationEventDetails(TypedDict):
+    fetchResult: DeviceBoundSessionFetchResult
+    newSession: NotRequired[DeviceBoundSession]
+    failedRequest: NotRequired[DeviceBoundSessionFailedRequest]
+
+
+class RefreshEventDetails(TypedDict):
+    refreshResult: Literal[
+        "Refreshed",
+        "InitializedService",
+        "Unreachable",
+        "ServerError",
+        "FatalError",
+        "SigningQuotaExceeded",
+        "RefreshedAsWaiter",
+        "TransientSigningError",
+        "InScopeRefreshNotYetNeeded",
+    ]
+    fetchResult: NotRequired[DeviceBoundSessionFetchResult]
+    newSession: NotRequired[DeviceBoundSession]
+    wasFullyProactiveRefresh: bool
+    failedRequest: NotRequired[DeviceBoundSessionFailedRequest]
+
+
+class TerminationEventDetails(TypedDict):
+    deletionReason: Literal[
+        "Expired",
+        "FailedToRestoreKey",
+        "FailedToUnwrapKey",
+        "StoragePartitionCleared",
+        "ClearBrowsingData",
+        "ServerRequested",
+        "InvalidSessionParams",
+        "RefreshFatalError",
+        "DevTools",
+    ]
+
+
+class ChallengeEventDetails(TypedDict):
+    challengeResult: Literal[
+        "Success", "NoSessionId", "NoSessionMatch", "CantSetBoundCookie"
+    ]
+    challenge: str
+
+
 class LoadNetworkResourcePageResult(TypedDict):
     success: bool
     netError: NotRequired[float]
@@ -608,9 +907,31 @@ class DeleteCookiesParameters(TypedDict):
     url: NotRequired[str]
     domain: NotRequired[str]
     path: NotRequired[str]
+    partitionKey: NotRequired[CookiePartitionKey]
 
 
 class EmulateNetworkConditionsParameters(TypedDict):
+    offline: bool
+    latency: float
+    downloadThroughput: float
+    uploadThroughput: float
+    connectionType: NotRequired[ConnectionType]
+    packetLoss: NotRequired[float]
+    packetQueueLength: NotRequired[int]
+    packetReordering: NotRequired[bool]
+
+
+class EmulateNetworkConditionsByRuleParameters(TypedDict):
+    offline: NotRequired[bool]
+    emulateOfflineServiceWorker: NotRequired[bool]
+    matchedNetworkConditions: list[NetworkConditions]
+
+
+class EmulateNetworkConditionsByRuleResult(TypedDict):
+    ruleIds: list[str]
+
+
+class OverrideNetworkStateParameters(TypedDict):
     offline: bool
     latency: float
     downloadThroughput: float
@@ -622,6 +943,13 @@ class EnableParameters(TypedDict):
     maxTotalBufferSize: NotRequired[int]
     maxResourceBufferSize: NotRequired[int]
     maxPostDataSize: NotRequired[int]
+    reportDirectSocketTraffic: NotRequired[bool]
+    enableDurableMessages: NotRequired[bool]
+
+
+class ConfigureDurableMessagesParameters(TypedDict):
+    maxTotalBufferSize: NotRequired[int]
+    maxResourceBufferSize: NotRequired[int]
 
 
 class GetAllCookiesResult(TypedDict):
@@ -659,6 +987,7 @@ class GetRequestPostDataParameters(TypedDict):
 
 class GetRequestPostDataResult(TypedDict):
     postData: str
+    base64Encoded: bool
 
 
 class GetResponseBodyForInterceptionParameters(TypedDict):
@@ -694,7 +1023,8 @@ class SearchInResponseBodyResult(TypedDict):
 
 
 class SetBlockedURLsParameters(TypedDict):
-    urls: list[str]
+    urlPatterns: NotRequired[list[BlockPattern]]
+    urls: NotRequired[list[str]]
 
 
 class SetBypassServiceWorkerParameters(TypedDict):
@@ -716,10 +1046,9 @@ class SetCookieParameters(TypedDict):
     sameSite: NotRequired[CookieSameSite]
     expires: NotRequired[TimeSinceEpoch]
     priority: NotRequired[CookiePriority]
-    sameParty: NotRequired[bool]
     sourceScheme: NotRequired[CookieSourceScheme]
     sourcePort: NotRequired[int]
-    partitionKey: NotRequired[str]
+    partitionKey: NotRequired[CookiePartitionKey]
 
 
 class SetCookieResult(TypedDict):
@@ -749,6 +1078,14 @@ class SetUserAgentOverrideParameters(TypedDict):
     userAgentMetadata: NotRequired[Emulation.UserAgentMetadata]
 
 
+class StreamResourceContentParameters(TypedDict):
+    requestId: RequestId
+
+
+class StreamResourceContentResult(TypedDict):
+    bufferedData: str
+
+
 class GetSecurityIsolationStatusParameters(TypedDict):
     frameId: NotRequired[Page.FrameId]
 
@@ -761,6 +1098,22 @@ class EnableReportingApiParameters(TypedDict):
     enable: bool
 
 
+class EnableDeviceBoundSessionsParameters(TypedDict):
+    enable: bool
+
+
+class DeleteDeviceBoundSessionParameters(TypedDict):
+    key: DeviceBoundSessionKey
+
+
+class FetchSchemefulSiteParameters(TypedDict):
+    origin: str
+
+
+class FetchSchemefulSiteResult(TypedDict):
+    schemefulSite: str
+
+
 class LoadNetworkResourceParameters(TypedDict):
     frameId: NotRequired[Page.FrameId]
     url: str
@@ -771,11 +1124,16 @@ class LoadNetworkResourceResult(TypedDict):
     resource: LoadNetworkResourcePageResult
 
 
+class SetCookieControlsParameters(TypedDict):
+    enableThirdPartyCookieRestriction: bool
+
+
 class DataReceivedEvent(TypedDict):
     requestId: RequestId
     timestamp: MonotonicTime
     dataLength: int
     encodedDataLength: int
+    data: NotRequired[str]
 
 
 class EventSourceMessageReceivedEvent(TypedDict):
@@ -834,6 +1192,7 @@ class RequestWillBeSentEvent(TypedDict):
     type: NotRequired[ResourceType]
     frameId: NotRequired[Page.FrameId]
     hasUserGesture: NotRequired[bool]
+    renderBlockingBehavior: NotRequired[RenderBlockingBehavior]
 
 
 class ResourceChangedPriorityEvent(TypedDict):
@@ -916,13 +1275,105 @@ class WebTransportClosedEvent(TypedDict):
     timestamp: MonotonicTime
 
 
+class DirectTCPSocketCreatedEvent(TypedDict):
+    identifier: RequestId
+    remoteAddr: str
+    remotePort: int
+    options: DirectTCPSocketOptions
+    timestamp: MonotonicTime
+    initiator: NotRequired[Initiator]
+
+
+class DirectTCPSocketOpenedEvent(TypedDict):
+    identifier: RequestId
+    remoteAddr: str
+    remotePort: int
+    timestamp: MonotonicTime
+    localAddr: NotRequired[str]
+    localPort: NotRequired[int]
+
+
+class DirectTCPSocketAbortedEvent(TypedDict):
+    identifier: RequestId
+    errorMessage: str
+    timestamp: MonotonicTime
+
+
+class DirectTCPSocketClosedEvent(TypedDict):
+    identifier: RequestId
+    timestamp: MonotonicTime
+
+
+class DirectTCPSocketChunkSentEvent(TypedDict):
+    identifier: RequestId
+    data: str
+    timestamp: MonotonicTime
+
+
+class DirectTCPSocketChunkReceivedEvent(TypedDict):
+    identifier: RequestId
+    data: str
+    timestamp: MonotonicTime
+
+
+class DirectUDPSocketJoinedMulticastGroupEvent(TypedDict):
+    identifier: RequestId
+    IPAddress: str
+
+
+class DirectUDPSocketLeftMulticastGroupEvent(TypedDict):
+    identifier: RequestId
+    IPAddress: str
+
+
+class DirectUDPSocketCreatedEvent(TypedDict):
+    identifier: RequestId
+    options: DirectUDPSocketOptions
+    timestamp: MonotonicTime
+    initiator: NotRequired[Initiator]
+
+
+class DirectUDPSocketOpenedEvent(TypedDict):
+    identifier: RequestId
+    localAddr: str
+    localPort: int
+    timestamp: MonotonicTime
+    remoteAddr: NotRequired[str]
+    remotePort: NotRequired[int]
+
+
+class DirectUDPSocketAbortedEvent(TypedDict):
+    identifier: RequestId
+    errorMessage: str
+    timestamp: MonotonicTime
+
+
+class DirectUDPSocketClosedEvent(TypedDict):
+    identifier: RequestId
+    timestamp: MonotonicTime
+
+
+class DirectUDPSocketChunkSentEvent(TypedDict):
+    identifier: RequestId
+    message: DirectUDPMessage
+    timestamp: MonotonicTime
+
+
+class DirectUDPSocketChunkReceivedEvent(TypedDict):
+    identifier: RequestId
+    message: DirectUDPMessage
+    timestamp: MonotonicTime
+
+
 class RequestWillBeSentExtraInfoEvent(TypedDict):
     requestId: RequestId
-    associatedCookies: list[BlockedCookieWithReason]
+    associatedCookies: list[AssociatedCookie]
     headers: Headers
     connectTiming: ConnectTiming
+    deviceBoundSessionUsages: NotRequired[list[DeviceBoundSessionWithUsage]]
     clientSecurityState: NotRequired[ClientSecurityState]
     siteHasCookieInOtherPartition: NotRequired[bool]
+    appliedNetworkConditionsId: NotRequired[str]
 
 
 class ResponseReceivedExtraInfoEvent(TypedDict):
@@ -932,8 +1383,14 @@ class ResponseReceivedExtraInfoEvent(TypedDict):
     resourceIPAddressSpace: IPAddressSpace
     statusCode: int
     headersText: NotRequired[str]
-    cookiePartitionKey: NotRequired[str]
+    cookiePartitionKey: NotRequired[CookiePartitionKey]
     cookiePartitionKeyOpaque: NotRequired[bool]
+    exemptedCookies: NotRequired[list[ExemptedSetCookieWithReason]]
+
+
+class ResponseReceivedEarlyHintsEvent(TypedDict):
+    requestId: RequestId
+    headers: Headers
 
 
 class TrustTokenOperationDoneEvent(TypedDict):
@@ -944,41 +1401,19 @@ class TrustTokenOperationDoneEvent(TypedDict):
         "FailedPrecondition",
         "ResourceExhausted",
         "AlreadyExists",
-        "Unavailable",
+        "ResourceLimited",
         "Unauthorized",
         "BadResponse",
         "InternalError",
         "UnknownError",
         "FulfilledLocally",
+        "SiteIssuerLimit",
     ]
     type: TrustTokenOperationType
     requestId: RequestId
     topLevelOrigin: NotRequired[str]
     issuerOrigin: NotRequired[str]
     issuedTokenCount: NotRequired[int]
-
-
-class SubresourceWebBundleMetadataReceivedEvent(TypedDict):
-    requestId: RequestId
-    urls: list[str]
-
-
-class SubresourceWebBundleMetadataErrorEvent(TypedDict):
-    requestId: RequestId
-    errorMessage: str
-
-
-class SubresourceWebBundleInnerResponseParsedEvent(TypedDict):
-    innerRequestId: RequestId
-    innerRequestURL: str
-    bundleRequestId: NotRequired[RequestId]
-
-
-class SubresourceWebBundleInnerResponseErrorEvent(TypedDict):
-    innerRequestId: RequestId
-    innerRequestURL: str
-    errorMessage: str
-    bundleRequestId: NotRequired[RequestId]
 
 
 class ReportingApiReportAddedEvent(TypedDict):
@@ -992,6 +1427,21 @@ class ReportingApiReportUpdatedEvent(TypedDict):
 class ReportingApiEndpointsChangedForOriginEvent(TypedDict):
     origin: str
     endpoints: list[ReportingApiEndpoint]
+
+
+class DeviceBoundSessionsAddedEvent(TypedDict):
+    sessions: list[DeviceBoundSession]
+
+
+class DeviceBoundSessionEventOccurredEvent(TypedDict):
+    eventId: DeviceBoundSessionEventId
+    site: str
+    succeeded: bool
+    sessionId: NotRequired[str]
+    creationEventDetails: NotRequired[CreationEventDetails]
+    refreshEventDetails: NotRequired[RefreshEventDetails]
+    terminationEventDetails: NotRequired[TerminationEventDetails]
+    challengeEventDetails: NotRequired[ChallengeEventDetails]
 
 
 class Network(BaseDomain):
@@ -1131,7 +1581,7 @@ class Network(BaseDomain):
         session_id: str | None = None,
         **kwargs: object,
     ) -> JsonObject:
-        """Deletes browser cookies with matching name and url or domain/path pair."""
+        """Deletes browser cookies with matching name and url or domain/path/partitionKey pair."""
 
         return await self._command("deleteCookies", params, session_id, kwargs)
 
@@ -1164,11 +1614,66 @@ class Network(BaseDomain):
         session_id: str | None = None,
         **kwargs: object,
     ) -> JsonObject:
-        """Activates emulation of network conditions."""
+        """Activates emulation of network conditions. This command is deprecated in favor of the emulateNetworkConditionsByRule and overrideNetworkState commands, which can be used together to the same effect."""
 
         return await self._command(
             "emulateNetworkConditions", params, session_id, kwargs
         )
+
+    @overload
+    async def emulateNetworkConditionsByRule(
+        self,
+        params: EmulateNetworkConditionsByRuleParameters,
+        session_id: str | None = None,
+    ) -> EmulateNetworkConditionsByRuleResult: ...
+
+    @overload
+    async def emulateNetworkConditionsByRule(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[EmulateNetworkConditionsByRuleParameters],
+    ) -> EmulateNetworkConditionsByRuleResult: ...
+
+    async def emulateNetworkConditionsByRule(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> EmulateNetworkConditionsByRuleResult:
+        """Activates emulation of network conditions for individual requests using URL match patterns. Unlike the deprecated Network.emulateNetworkConditions this method does not affect `navigator` state. Use Network.overrideNetworkState to explicitly modify `navigator` behavior."""
+
+        return cast(
+            EmulateNetworkConditionsByRuleResult,
+            await self._command(
+                "emulateNetworkConditionsByRule", params, session_id, kwargs
+            ),
+        )
+
+    @overload
+    async def overrideNetworkState(
+        self,
+        params: OverrideNetworkStateParameters,
+        session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def overrideNetworkState(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[OverrideNetworkStateParameters],
+    ) -> JsonObject: ...
+
+    async def overrideNetworkState(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> JsonObject:
+        """Override the state of navigator.onLine and navigator.connection."""
+
+        return await self._command("overrideNetworkState", params, session_id, kwargs)
 
     @overload
     async def enable(
@@ -1194,6 +1699,33 @@ class Network(BaseDomain):
         """Enables network tracking, network events will now be delivered to the client."""
 
         return await self._command("enable", params, session_id, kwargs)
+
+    @overload
+    async def configureDurableMessages(
+        self,
+        params: ConfigureDurableMessagesParameters,
+        session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def configureDurableMessages(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[ConfigureDurableMessagesParameters],
+    ) -> JsonObject: ...
+
+    async def configureDurableMessages(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> JsonObject:
+        """Configures storing response bodies outside of renderer, so that these survive a cross-process navigation. If maxTotalBufferSize is not set, durable messages are disabled."""
+
+        return await self._command(
+            "configureDurableMessages", params, session_id, kwargs
+        )
 
     async def getAllCookies(
         self,
@@ -1660,6 +2192,34 @@ class Network(BaseDomain):
         return await self._command("setUserAgentOverride", params, session_id, kwargs)
 
     @overload
+    async def streamResourceContent(
+        self,
+        params: StreamResourceContentParameters,
+        session_id: str | None = None,
+    ) -> StreamResourceContentResult: ...
+
+    @overload
+    async def streamResourceContent(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[StreamResourceContentParameters],
+    ) -> StreamResourceContentResult: ...
+
+    async def streamResourceContent(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> StreamResourceContentResult:
+        """Enables streaming of the response for the given requestId. If enabled, the dataReceived event contains the data that was received during streaming."""
+
+        return cast(
+            StreamResourceContentResult,
+            await self._command("streamResourceContent", params, session_id, kwargs),
+        )
+
+    @overload
     async def getSecurityIsolationStatus(
         self,
         params: GetSecurityIsolationStatusParameters,
@@ -1715,6 +2275,88 @@ class Network(BaseDomain):
         return await self._command("enableReportingApi", params, session_id, kwargs)
 
     @overload
+    async def enableDeviceBoundSessions(
+        self,
+        params: EnableDeviceBoundSessionsParameters,
+        session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def enableDeviceBoundSessions(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[EnableDeviceBoundSessionsParameters],
+    ) -> JsonObject: ...
+
+    async def enableDeviceBoundSessions(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> JsonObject:
+        """Sets up tracking device bound sessions and fetching of initial set of sessions."""
+
+        return await self._command(
+            "enableDeviceBoundSessions", params, session_id, kwargs
+        )
+
+    @overload
+    async def deleteDeviceBoundSession(
+        self,
+        params: DeleteDeviceBoundSessionParameters,
+        session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def deleteDeviceBoundSession(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[DeleteDeviceBoundSessionParameters],
+    ) -> JsonObject: ...
+
+    async def deleteDeviceBoundSession(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> JsonObject:
+        """Deletes a device bound session."""
+
+        return await self._command(
+            "deleteDeviceBoundSession", params, session_id, kwargs
+        )
+
+    @overload
+    async def fetchSchemefulSite(
+        self,
+        params: FetchSchemefulSiteParameters,
+        session_id: str | None = None,
+    ) -> FetchSchemefulSiteResult: ...
+
+    @overload
+    async def fetchSchemefulSite(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[FetchSchemefulSiteParameters],
+    ) -> FetchSchemefulSiteResult: ...
+
+    async def fetchSchemefulSite(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> FetchSchemefulSiteResult:
+        """Fetches the schemeful site for a specific origin."""
+
+        return cast(
+            FetchSchemefulSiteResult,
+            await self._command("fetchSchemefulSite", params, session_id, kwargs),
+        )
+
+    @overload
     async def loadNetworkResource(
         self,
         params: LoadNetworkResourceParameters,
@@ -1741,6 +2383,31 @@ class Network(BaseDomain):
             LoadNetworkResourceResult,
             await self._command("loadNetworkResource", params, session_id, kwargs),
         )
+
+    @overload
+    async def setCookieControls(
+        self,
+        params: SetCookieControlsParameters,
+        session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def setCookieControls(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[SetCookieControlsParameters],
+    ) -> JsonObject: ...
+
+    async def setCookieControls(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> JsonObject:
+        """Sets Controls for third-party cookie access Page reload is required before the new cookie behavior will be observed"""
+
+        return await self._command("setCookieControls", params, session_id, kwargs)
 
     @overload
     def dataReceived(
@@ -2743,6 +3410,720 @@ class Network(BaseDomain):
         )
 
     @overload
+    def directTCPSocketCreated(
+        self,
+        callback_or_session: EventCallback[DirectTCPSocketCreatedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directTCPSocketCreated(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DirectTCPSocketCreatedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directTCPSocketCreated(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectTCPSocketCreatedEvent]: ...
+
+    def directTCPSocketCreated(
+        self,
+        callback_or_session: EventCallback[DirectTCPSocketCreatedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DirectTCPSocketCreatedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectTCPSocketCreatedEvent] | Unsubscribe:
+        """Fired upon direct_socket.TCPSocket creation."""
+
+        return cast(
+            Awaitable[DirectTCPSocketCreatedEvent] | Unsubscribe,
+            self._event(
+                "directTCPSocketCreated",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def directTCPSocketOpened(
+        self,
+        callback_or_session: EventCallback[DirectTCPSocketOpenedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directTCPSocketOpened(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DirectTCPSocketOpenedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directTCPSocketOpened(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectTCPSocketOpenedEvent]: ...
+
+    def directTCPSocketOpened(
+        self,
+        callback_or_session: EventCallback[DirectTCPSocketOpenedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DirectTCPSocketOpenedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectTCPSocketOpenedEvent] | Unsubscribe:
+        """Fired when direct_socket.TCPSocket connection is opened."""
+
+        return cast(
+            Awaitable[DirectTCPSocketOpenedEvent] | Unsubscribe,
+            self._event(
+                "directTCPSocketOpened",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def directTCPSocketAborted(
+        self,
+        callback_or_session: EventCallback[DirectTCPSocketAbortedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directTCPSocketAborted(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DirectTCPSocketAbortedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directTCPSocketAborted(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectTCPSocketAbortedEvent]: ...
+
+    def directTCPSocketAborted(
+        self,
+        callback_or_session: EventCallback[DirectTCPSocketAbortedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DirectTCPSocketAbortedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectTCPSocketAbortedEvent] | Unsubscribe:
+        """Fired when direct_socket.TCPSocket is aborted."""
+
+        return cast(
+            Awaitable[DirectTCPSocketAbortedEvent] | Unsubscribe,
+            self._event(
+                "directTCPSocketAborted",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def directTCPSocketClosed(
+        self,
+        callback_or_session: EventCallback[DirectTCPSocketClosedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directTCPSocketClosed(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DirectTCPSocketClosedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directTCPSocketClosed(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectTCPSocketClosedEvent]: ...
+
+    def directTCPSocketClosed(
+        self,
+        callback_or_session: EventCallback[DirectTCPSocketClosedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DirectTCPSocketClosedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectTCPSocketClosedEvent] | Unsubscribe:
+        """Fired when direct_socket.TCPSocket is closed."""
+
+        return cast(
+            Awaitable[DirectTCPSocketClosedEvent] | Unsubscribe,
+            self._event(
+                "directTCPSocketClosed",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def directTCPSocketChunkSent(
+        self,
+        callback_or_session: EventCallback[DirectTCPSocketChunkSentEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directTCPSocketChunkSent(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DirectTCPSocketChunkSentEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directTCPSocketChunkSent(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectTCPSocketChunkSentEvent]: ...
+
+    def directTCPSocketChunkSent(
+        self,
+        callback_or_session: EventCallback[DirectTCPSocketChunkSentEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DirectTCPSocketChunkSentEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectTCPSocketChunkSentEvent] | Unsubscribe:
+        """Fired when data is sent to tcp direct socket stream."""
+
+        return cast(
+            Awaitable[DirectTCPSocketChunkSentEvent] | Unsubscribe,
+            self._event(
+                "directTCPSocketChunkSent",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def directTCPSocketChunkReceived(
+        self,
+        callback_or_session: EventCallback[DirectTCPSocketChunkReceivedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directTCPSocketChunkReceived(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DirectTCPSocketChunkReceivedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directTCPSocketChunkReceived(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectTCPSocketChunkReceivedEvent]: ...
+
+    def directTCPSocketChunkReceived(
+        self,
+        callback_or_session: EventCallback[DirectTCPSocketChunkReceivedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DirectTCPSocketChunkReceivedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectTCPSocketChunkReceivedEvent] | Unsubscribe:
+        """Fired when data is received from tcp direct socket stream."""
+
+        return cast(
+            Awaitable[DirectTCPSocketChunkReceivedEvent] | Unsubscribe,
+            self._event(
+                "directTCPSocketChunkReceived",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def directUDPSocketJoinedMulticastGroup(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketJoinedMulticastGroupEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketJoinedMulticastGroup(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DirectUDPSocketJoinedMulticastGroupEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketJoinedMulticastGroup(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketJoinedMulticastGroupEvent]: ...
+
+    def directUDPSocketJoinedMulticastGroup(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketJoinedMulticastGroupEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DirectUDPSocketJoinedMulticastGroupEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketJoinedMulticastGroupEvent] | Unsubscribe:
+        """Wait for or subscribe to Network.directUDPSocketJoinedMulticastGroup."""
+
+        return cast(
+            Awaitable[DirectUDPSocketJoinedMulticastGroupEvent] | Unsubscribe,
+            self._event(
+                "directUDPSocketJoinedMulticastGroup",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def directUDPSocketLeftMulticastGroup(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketLeftMulticastGroupEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketLeftMulticastGroup(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DirectUDPSocketLeftMulticastGroupEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketLeftMulticastGroup(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketLeftMulticastGroupEvent]: ...
+
+    def directUDPSocketLeftMulticastGroup(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketLeftMulticastGroupEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DirectUDPSocketLeftMulticastGroupEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketLeftMulticastGroupEvent] | Unsubscribe:
+        """Wait for or subscribe to Network.directUDPSocketLeftMulticastGroup."""
+
+        return cast(
+            Awaitable[DirectUDPSocketLeftMulticastGroupEvent] | Unsubscribe,
+            self._event(
+                "directUDPSocketLeftMulticastGroup",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def directUDPSocketCreated(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketCreatedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketCreated(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DirectUDPSocketCreatedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketCreated(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketCreatedEvent]: ...
+
+    def directUDPSocketCreated(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketCreatedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DirectUDPSocketCreatedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketCreatedEvent] | Unsubscribe:
+        """Fired upon direct_socket.UDPSocket creation."""
+
+        return cast(
+            Awaitable[DirectUDPSocketCreatedEvent] | Unsubscribe,
+            self._event(
+                "directUDPSocketCreated",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def directUDPSocketOpened(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketOpenedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketOpened(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DirectUDPSocketOpenedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketOpened(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketOpenedEvent]: ...
+
+    def directUDPSocketOpened(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketOpenedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DirectUDPSocketOpenedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketOpenedEvent] | Unsubscribe:
+        """Fired when direct_socket.UDPSocket connection is opened."""
+
+        return cast(
+            Awaitable[DirectUDPSocketOpenedEvent] | Unsubscribe,
+            self._event(
+                "directUDPSocketOpened",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def directUDPSocketAborted(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketAbortedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketAborted(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DirectUDPSocketAbortedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketAborted(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketAbortedEvent]: ...
+
+    def directUDPSocketAborted(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketAbortedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DirectUDPSocketAbortedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketAbortedEvent] | Unsubscribe:
+        """Fired when direct_socket.UDPSocket is aborted."""
+
+        return cast(
+            Awaitable[DirectUDPSocketAbortedEvent] | Unsubscribe,
+            self._event(
+                "directUDPSocketAborted",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def directUDPSocketClosed(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketClosedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketClosed(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DirectUDPSocketClosedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketClosed(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketClosedEvent]: ...
+
+    def directUDPSocketClosed(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketClosedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DirectUDPSocketClosedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketClosedEvent] | Unsubscribe:
+        """Fired when direct_socket.UDPSocket is closed."""
+
+        return cast(
+            Awaitable[DirectUDPSocketClosedEvent] | Unsubscribe,
+            self._event(
+                "directUDPSocketClosed",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def directUDPSocketChunkSent(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketChunkSentEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketChunkSent(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DirectUDPSocketChunkSentEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketChunkSent(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketChunkSentEvent]: ...
+
+    def directUDPSocketChunkSent(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketChunkSentEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DirectUDPSocketChunkSentEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketChunkSentEvent] | Unsubscribe:
+        """Fired when message is sent to udp direct socket stream."""
+
+        return cast(
+            Awaitable[DirectUDPSocketChunkSentEvent] | Unsubscribe,
+            self._event(
+                "directUDPSocketChunkSent",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def directUDPSocketChunkReceived(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketChunkReceivedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketChunkReceived(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DirectUDPSocketChunkReceivedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def directUDPSocketChunkReceived(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketChunkReceivedEvent]: ...
+
+    def directUDPSocketChunkReceived(
+        self,
+        callback_or_session: EventCallback[DirectUDPSocketChunkReceivedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DirectUDPSocketChunkReceivedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DirectUDPSocketChunkReceivedEvent] | Unsubscribe:
+        """Fired when message is received from udp direct socket stream."""
+
+        return cast(
+            Awaitable[DirectUDPSocketChunkReceivedEvent] | Unsubscribe,
+            self._event(
+                "directUDPSocketChunkReceived",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
     def requestWillBeSentExtraInfo(
         self,
         callback_or_session: EventCallback[RequestWillBeSentExtraInfoEvent],
@@ -2845,6 +4226,57 @@ class Network(BaseDomain):
         )
 
     @overload
+    def responseReceivedEarlyHints(
+        self,
+        callback_or_session: EventCallback[ResponseReceivedEarlyHintsEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def responseReceivedEarlyHints(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[ResponseReceivedEarlyHintsEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def responseReceivedEarlyHints(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[ResponseReceivedEarlyHintsEvent]: ...
+
+    def responseReceivedEarlyHints(
+        self,
+        callback_or_session: EventCallback[ResponseReceivedEarlyHintsEvent]
+        | str
+        | None = None,
+        handler: EventCallback[ResponseReceivedEarlyHintsEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[ResponseReceivedEarlyHintsEvent] | Unsubscribe:
+        """Fired when 103 Early Hints headers is received in addition to the common response. Not every responseReceived event will have an responseReceivedEarlyHints fired. Only one responseReceivedEarlyHints may be fired for eached responseReceived event."""
+
+        return cast(
+            Awaitable[ResponseReceivedEarlyHintsEvent] | Unsubscribe,
+            self._event(
+                "responseReceivedEarlyHints",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
     def trustTokenOperationDone(
         self,
         callback_or_session: EventCallback[TrustTokenOperationDoneEvent],
@@ -2896,211 +4328,46 @@ class Network(BaseDomain):
         )
 
     @overload
-    def subresourceWebBundleMetadataReceived(
+    def policyUpdated(
         self,
-        callback_or_session: EventCallback[SubresourceWebBundleMetadataReceivedEvent],
+        callback_or_session: EventCallback[JsonObject],
         handler: None = None,
         *,
         session_id: str | None = None,
     ) -> Unsubscribe: ...
 
     @overload
-    def subresourceWebBundleMetadataReceived(
+    def policyUpdated(
         self,
         callback_or_session: str,
-        handler: EventCallback[SubresourceWebBundleMetadataReceivedEvent],
+        handler: EventCallback[JsonObject],
         *,
         session_id: str | None = None,
     ) -> Unsubscribe: ...
 
     @overload
-    def subresourceWebBundleMetadataReceived(
+    def policyUpdated(
         self,
         callback_or_session: str | None = None,
         handler: None = None,
         *,
         session_id: str | None = None,
-    ) -> Awaitable[SubresourceWebBundleMetadataReceivedEvent]: ...
+    ) -> Awaitable[JsonObject]: ...
 
-    def subresourceWebBundleMetadataReceived(
+    def policyUpdated(
         self,
-        callback_or_session: EventCallback[SubresourceWebBundleMetadataReceivedEvent]
-        | str
-        | None = None,
-        handler: EventCallback[SubresourceWebBundleMetadataReceivedEvent] | None = None,
+        callback_or_session: EventCallback[JsonObject] | str | None = None,
+        handler: EventCallback[JsonObject] | None = None,
         *,
         session_id: str | None = None,
-    ) -> Awaitable[SubresourceWebBundleMetadataReceivedEvent] | Unsubscribe:
-        """Fired once when parsing the .wbn file has succeeded. The event contains the information about the web bundle contents."""
+    ) -> Awaitable[JsonObject] | Unsubscribe:
+        """Fired once security policy has been updated."""
 
-        return cast(
-            Awaitable[SubresourceWebBundleMetadataReceivedEvent] | Unsubscribe,
-            self._event(
-                "subresourceWebBundleMetadataReceived",
-                cast(
-                    EventCallback[Mapping[str, object]] | str | None,
-                    callback_or_session,
-                ),
-                cast(EventCallback[Mapping[str, object]] | None, handler),
-                session_id,
-            ),
-        )
-
-    @overload
-    def subresourceWebBundleMetadataError(
-        self,
-        callback_or_session: EventCallback[SubresourceWebBundleMetadataErrorEvent],
-        handler: None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Unsubscribe: ...
-
-    @overload
-    def subresourceWebBundleMetadataError(
-        self,
-        callback_or_session: str,
-        handler: EventCallback[SubresourceWebBundleMetadataErrorEvent],
-        *,
-        session_id: str | None = None,
-    ) -> Unsubscribe: ...
-
-    @overload
-    def subresourceWebBundleMetadataError(
-        self,
-        callback_or_session: str | None = None,
-        handler: None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Awaitable[SubresourceWebBundleMetadataErrorEvent]: ...
-
-    def subresourceWebBundleMetadataError(
-        self,
-        callback_or_session: EventCallback[SubresourceWebBundleMetadataErrorEvent]
-        | str
-        | None = None,
-        handler: EventCallback[SubresourceWebBundleMetadataErrorEvent] | None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Awaitable[SubresourceWebBundleMetadataErrorEvent] | Unsubscribe:
-        """Fired once when parsing the .wbn file has failed."""
-
-        return cast(
-            Awaitable[SubresourceWebBundleMetadataErrorEvent] | Unsubscribe,
-            self._event(
-                "subresourceWebBundleMetadataError",
-                cast(
-                    EventCallback[Mapping[str, object]] | str | None,
-                    callback_or_session,
-                ),
-                cast(EventCallback[Mapping[str, object]] | None, handler),
-                session_id,
-            ),
-        )
-
-    @overload
-    def subresourceWebBundleInnerResponseParsed(
-        self,
-        callback_or_session: EventCallback[
-            SubresourceWebBundleInnerResponseParsedEvent
-        ],
-        handler: None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Unsubscribe: ...
-
-    @overload
-    def subresourceWebBundleInnerResponseParsed(
-        self,
-        callback_or_session: str,
-        handler: EventCallback[SubresourceWebBundleInnerResponseParsedEvent],
-        *,
-        session_id: str | None = None,
-    ) -> Unsubscribe: ...
-
-    @overload
-    def subresourceWebBundleInnerResponseParsed(
-        self,
-        callback_or_session: str | None = None,
-        handler: None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Awaitable[SubresourceWebBundleInnerResponseParsedEvent]: ...
-
-    def subresourceWebBundleInnerResponseParsed(
-        self,
-        callback_or_session: EventCallback[SubresourceWebBundleInnerResponseParsedEvent]
-        | str
-        | None = None,
-        handler: EventCallback[SubresourceWebBundleInnerResponseParsedEvent]
-        | None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Awaitable[SubresourceWebBundleInnerResponseParsedEvent] | Unsubscribe:
-        """Fired when handling requests for resources within a .wbn file. Note: this will only be fired for resources that are requested by the webpage."""
-
-        return cast(
-            Awaitable[SubresourceWebBundleInnerResponseParsedEvent] | Unsubscribe,
-            self._event(
-                "subresourceWebBundleInnerResponseParsed",
-                cast(
-                    EventCallback[Mapping[str, object]] | str | None,
-                    callback_or_session,
-                ),
-                cast(EventCallback[Mapping[str, object]] | None, handler),
-                session_id,
-            ),
-        )
-
-    @overload
-    def subresourceWebBundleInnerResponseError(
-        self,
-        callback_or_session: EventCallback[SubresourceWebBundleInnerResponseErrorEvent],
-        handler: None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Unsubscribe: ...
-
-    @overload
-    def subresourceWebBundleInnerResponseError(
-        self,
-        callback_or_session: str,
-        handler: EventCallback[SubresourceWebBundleInnerResponseErrorEvent],
-        *,
-        session_id: str | None = None,
-    ) -> Unsubscribe: ...
-
-    @overload
-    def subresourceWebBundleInnerResponseError(
-        self,
-        callback_or_session: str | None = None,
-        handler: None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Awaitable[SubresourceWebBundleInnerResponseErrorEvent]: ...
-
-    def subresourceWebBundleInnerResponseError(
-        self,
-        callback_or_session: EventCallback[SubresourceWebBundleInnerResponseErrorEvent]
-        | str
-        | None = None,
-        handler: EventCallback[SubresourceWebBundleInnerResponseErrorEvent]
-        | None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Awaitable[SubresourceWebBundleInnerResponseErrorEvent] | Unsubscribe:
-        """Fired when request for resources within a .wbn file failed."""
-
-        return cast(
-            Awaitable[SubresourceWebBundleInnerResponseErrorEvent] | Unsubscribe,
-            self._event(
-                "subresourceWebBundleInnerResponseError",
-                cast(
-                    EventCallback[Mapping[str, object]] | str | None,
-                    callback_or_session,
-                ),
-                cast(EventCallback[Mapping[str, object]] | None, handler),
-                session_id,
-            ),
+        return self._event(
+            "policyUpdated",
+            cast(EventCallback[Mapping[str, object]] | str | None, callback_or_session),
+            cast(EventCallback[Mapping[str, object]] | None, handler),
+            session_id,
         )
 
     @overload
@@ -3257,12 +4524,118 @@ class Network(BaseDomain):
             ),
         )
 
+    @overload
+    def deviceBoundSessionsAdded(
+        self,
+        callback_or_session: EventCallback[DeviceBoundSessionsAddedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def deviceBoundSessionsAdded(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DeviceBoundSessionsAddedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def deviceBoundSessionsAdded(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DeviceBoundSessionsAddedEvent]: ...
+
+    def deviceBoundSessionsAdded(
+        self,
+        callback_or_session: EventCallback[DeviceBoundSessionsAddedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DeviceBoundSessionsAddedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DeviceBoundSessionsAddedEvent] | Unsubscribe:
+        """Triggered when the initial set of device bound sessions is added."""
+
+        return cast(
+            Awaitable[DeviceBoundSessionsAddedEvent] | Unsubscribe,
+            self._event(
+                "deviceBoundSessionsAdded",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def deviceBoundSessionEventOccurred(
+        self,
+        callback_or_session: EventCallback[DeviceBoundSessionEventOccurredEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def deviceBoundSessionEventOccurred(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[DeviceBoundSessionEventOccurredEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def deviceBoundSessionEventOccurred(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DeviceBoundSessionEventOccurredEvent]: ...
+
+    def deviceBoundSessionEventOccurred(
+        self,
+        callback_or_session: EventCallback[DeviceBoundSessionEventOccurredEvent]
+        | str
+        | None = None,
+        handler: EventCallback[DeviceBoundSessionEventOccurredEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[DeviceBoundSessionEventOccurredEvent] | Unsubscribe:
+        """Triggered when a device bound session event occurs."""
+
+        return cast(
+            Awaitable[DeviceBoundSessionEventOccurredEvent] | Unsubscribe,
+            self._event(
+                "deviceBoundSessionEventOccurred",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
 
 __all__ = [
+    "AdAncestry",
+    "AdProvenance",
+    "AdScriptIdentifier",
     "AlternateProtocolUsage",
+    "AssociatedCookie",
     "AuthChallenge",
     "AuthChallengeResponse",
-    "BlockedCookieWithReason",
+    "BlockPattern",
     "BlockedReason",
     "BlockedSetCookieWithReason",
     "CachedResource",
@@ -3270,7 +4643,9 @@ __all__ = [
     "CanClearBrowserCookiesResult",
     "CanEmulateNetworkConditionsResult",
     "CertificateTransparencyCompliance",
+    "ChallengeEventDetails",
     "ClientSecurityState",
+    "ConfigureDurableMessagesParameters",
     "ConnectTiming",
     "ConnectionType",
     "ContentEncoding",
@@ -3279,23 +4654,62 @@ __all__ = [
     "ContinueInterceptedRequestParameters",
     "Cookie",
     "CookieBlockedReason",
+    "CookieExemptionReason",
     "CookieParam",
+    "CookiePartitionKey",
     "CookiePriority",
     "CookieSameSite",
     "CookieSourceScheme",
     "CorsError",
     "CorsErrorStatus",
+    "CreationEventDetails",
     "CrossOriginEmbedderPolicyStatus",
     "CrossOriginEmbedderPolicyValue",
     "CrossOriginOpenerPolicyStatus",
     "CrossOriginOpenerPolicyValue",
     "DataReceivedEvent",
     "DeleteCookiesParameters",
+    "DeleteDeviceBoundSessionParameters",
+    "DeviceBoundSession",
+    "DeviceBoundSessionCookieCraving",
+    "DeviceBoundSessionEventId",
+    "DeviceBoundSessionEventOccurredEvent",
+    "DeviceBoundSessionFailedRequest",
+    "DeviceBoundSessionFetchResult",
+    "DeviceBoundSessionInclusionRules",
+    "DeviceBoundSessionKey",
+    "DeviceBoundSessionUrlRule",
+    "DeviceBoundSessionWithUsage",
+    "DeviceBoundSessionsAddedEvent",
+    "DirectSocketDnsQueryType",
+    "DirectTCPSocketAbortedEvent",
+    "DirectTCPSocketChunkReceivedEvent",
+    "DirectTCPSocketChunkSentEvent",
+    "DirectTCPSocketClosedEvent",
+    "DirectTCPSocketCreatedEvent",
+    "DirectTCPSocketOpenedEvent",
+    "DirectTCPSocketOptions",
+    "DirectUDPMessage",
+    "DirectUDPSocketAbortedEvent",
+    "DirectUDPSocketChunkReceivedEvent",
+    "DirectUDPSocketChunkSentEvent",
+    "DirectUDPSocketClosedEvent",
+    "DirectUDPSocketCreatedEvent",
+    "DirectUDPSocketJoinedMulticastGroupEvent",
+    "DirectUDPSocketLeftMulticastGroupEvent",
+    "DirectUDPSocketOpenedEvent",
+    "DirectUDPSocketOptions",
+    "EmulateNetworkConditionsByRuleParameters",
+    "EmulateNetworkConditionsByRuleResult",
     "EmulateNetworkConditionsParameters",
+    "EnableDeviceBoundSessionsParameters",
     "EnableParameters",
     "EnableReportingApiParameters",
     "ErrorReason",
     "EventSourceMessageReceivedEvent",
+    "ExemptedSetCookieWithReason",
+    "FetchSchemefulSiteParameters",
+    "FetchSchemefulSiteResult",
     "GetAllCookiesResult",
     "GetCertificateParameters",
     "GetCertificateResult",
@@ -3321,10 +4735,14 @@ __all__ = [
     "LoaderId",
     "LoadingFailedEvent",
     "LoadingFinishedEvent",
+    "LocalNetworkAccessRequestPolicy",
     "MonotonicTime",
     "Network",
+    "NetworkConditions",
+    "OverrideNetworkStateParameters",
     "PostDataEntry",
-    "PrivateNetworkRequestPolicy",
+    "RefreshEventDetails",
+    "RenderBlockingBehavior",
     "ReplayXHRParameters",
     "ReportId",
     "ReportStatus",
@@ -3345,6 +4763,7 @@ __all__ = [
     "ResourceTiming",
     "ResourceType",
     "Response",
+    "ResponseReceivedEarlyHintsEvent",
     "ResponseReceivedEvent",
     "ResponseReceivedExtraInfoEvent",
     "SearchInResponseBodyParameters",
@@ -3352,12 +4771,15 @@ __all__ = [
     "SecurityDetails",
     "SecurityIsolationStatus",
     "ServiceWorkerResponseSource",
+    "ServiceWorkerRouterInfo",
+    "ServiceWorkerRouterSource",
     "SetAcceptedEncodingsParameters",
     "SetAttachDebugStackParameters",
     "SetBlockedURLsParameters",
     "SetBypassServiceWorkerParameters",
     "SetCacheDisabledParameters",
     "SetCookieBlockedReason",
+    "SetCookieControlsParameters",
     "SetCookieParameters",
     "SetCookieResult",
     "SetCookiesParameters",
@@ -3371,12 +4793,11 @@ __all__ = [
     "SignedExchangeInfo",
     "SignedExchangeReceivedEvent",
     "SignedExchangeSignature",
-    "SubresourceWebBundleInnerResponseErrorEvent",
-    "SubresourceWebBundleInnerResponseParsedEvent",
-    "SubresourceWebBundleMetadataErrorEvent",
-    "SubresourceWebBundleMetadataReceivedEvent",
+    "StreamResourceContentParameters",
+    "StreamResourceContentResult",
     "TakeResponseBodyForInterceptionAsStreamParameters",
     "TakeResponseBodyForInterceptionAsStreamResult",
+    "TerminationEventDetails",
     "TimeSinceEpoch",
     "TrustTokenOperationDoneEvent",
     "TrustTokenOperationType",

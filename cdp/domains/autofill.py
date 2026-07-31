@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, overload
+from collections.abc import Awaitable, Mapping
+from typing import TYPE_CHECKING, Literal, TypeAlias, cast, overload
 
 from typing_extensions import NotRequired, TypedDict, Unpack
 
-from cdp.domain import Domain as BaseDomain
+from cdp.domain import Domain as BaseDomain, EventCallback, Unsubscribe
 from cdp.types import JsonObject
 
 if TYPE_CHECKING:
@@ -28,18 +28,46 @@ class AddressField(TypedDict):
     value: str
 
 
+class AddressFields(TypedDict):
+    fields: list[AddressField]
+
+
 class Address(TypedDict):
     fields: list[AddressField]
+
+
+class AddressUI(TypedDict):
+    addressFields: list[AddressFields]
+
+
+FillingStrategy: TypeAlias = Literal["autocompleteAttribute", "autofillInferred"]
+
+
+class FilledField(TypedDict):
+    htmlType: str
+    id: str
+    name: str
+    value: str
+    autofillType: str
+    fillingStrategy: FillingStrategy
+    frameId: Page.FrameId
+    fieldId: DOM.BackendNodeId
 
 
 class TriggerParameters(TypedDict):
     fieldId: DOM.BackendNodeId
     frameId: NotRequired[Page.FrameId]
-    card: CreditCard
+    card: NotRequired[CreditCard]
+    address: NotRequired[Address]
 
 
 class SetAddressesParameters(TypedDict):
     addresses: list[Address]
+
+
+class AddressFormFilledEvent(TypedDict):
+    filledFields: list[FilledField]
+    addressUi: AddressUI
 
 
 class Autofill(BaseDomain):
@@ -97,12 +125,82 @@ class Autofill(BaseDomain):
 
         return await self._command("setAddresses", params, session_id, kwargs)
 
+    async def disable(
+        self,
+        session_id: str | None = None,
+    ) -> JsonObject:
+        """Disables autofill domain notifications."""
+
+        return await self._command("disable", None, session_id, {})
+
+    async def enable(
+        self,
+        session_id: str | None = None,
+    ) -> JsonObject:
+        """Enables autofill domain notifications."""
+
+        return await self._command("enable", None, session_id, {})
+
+    @overload
+    def addressFormFilled(
+        self,
+        callback_or_session: EventCallback[AddressFormFilledEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def addressFormFilled(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[AddressFormFilledEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def addressFormFilled(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[AddressFormFilledEvent]: ...
+
+    def addressFormFilled(
+        self,
+        callback_or_session: EventCallback[AddressFormFilledEvent] | str | None = None,
+        handler: EventCallback[AddressFormFilledEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[AddressFormFilledEvent] | Unsubscribe:
+        """Emitted when an address form is filled."""
+
+        return cast(
+            Awaitable[AddressFormFilledEvent] | Unsubscribe,
+            self._event(
+                "addressFormFilled",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
 
 __all__ = [
     "Address",
     "AddressField",
+    "AddressFields",
+    "AddressFormFilledEvent",
+    "AddressUI",
     "Autofill",
     "CreditCard",
+    "FilledField",
+    "FillingStrategy",
     "SetAddressesParameters",
     "TriggerParameters",
 ]

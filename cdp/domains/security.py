@@ -114,7 +114,7 @@ class SecurityStateChangedEvent(TypedDict):
 
 
 class Security(BaseDomain):
-    """Security"""
+    """The CDP Security domain."""
 
     domain_name = "Security"
 

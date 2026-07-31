@@ -511,6 +511,10 @@ def generate(protocol_path: Path, package_path: Path) -> None:
     ruff = Path(sys.executable).with_name(
         "ruff.exe" if sys.platform == "win32" else "ruff"
     )
+    if not ruff.is_file():
+        ruff_on_path = shutil.which("ruff")
+        if ruff_on_path is not None:
+            ruff = Path(ruff_on_path)
     if ruff.is_file():
         subprocess.run(
             [str(ruff), "format", str(destination)],
@@ -525,6 +529,7 @@ def generate(protocol_path: Path, package_path: Path) -> None:
                 str(ruff),
                 "check",
                 "--fix",
+                "--quiet",
                 "--select",
                 "F401,I001,RUF022,RUF068",
                 str(destination),

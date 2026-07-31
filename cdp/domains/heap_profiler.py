@@ -62,6 +62,7 @@ class GetSamplingProfileResult(TypedDict):
 
 class StartSamplingParameters(TypedDict):
     samplingInterval: NotRequired[float]
+    stackDepth: NotRequired[float]
     includeObjectsCollectedByMajorGC: NotRequired[bool]
     includeObjectsCollectedByMinorGC: NotRequired[bool]
 

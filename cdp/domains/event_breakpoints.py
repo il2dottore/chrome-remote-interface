@@ -20,7 +20,7 @@ class RemoveInstrumentationBreakpointParameters(TypedDict):
 
 
 class EventBreakpoints(BaseDomain):
-    """EventBreakpoints permits setting breakpoints on particular operations and events in targets that run JavaScript but do not have a DOM. JavaScript execution will stop on these operations as if there was a regular breakpoint set."""
+    """EventBreakpoints permits setting JavaScript breakpoints on operations and events occurring in native code invoked from JavaScript. Once breakpoint is hit, it is reported through Debugger domain, similarly to regular breakpoints being hit."""
 
     domain_name = "EventBreakpoints"
 
@@ -77,6 +77,14 @@ class EventBreakpoints(BaseDomain):
         return await self._command(
             "removeInstrumentationBreakpoint", params, session_id, kwargs
         )
+
+    async def disable(
+        self,
+        session_id: str | None = None,
+    ) -> JsonObject:
+        """Removes all breakpoints"""
+
+        return await self._command("disable", None, session_id, {})
 
 
 __all__ = [

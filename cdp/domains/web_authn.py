@@ -15,7 +15,7 @@ AuthenticatorId: TypeAlias = str
 
 AuthenticatorProtocol: TypeAlias = Literal["u2f", "ctap2"]
 
-Ctap2Version: TypeAlias = Literal["ctap2_0", "ctap2_1"]
+Ctap2Version: TypeAlias = Literal["ctap2_0", "ctap2_1", "ctap2_2"]
 
 AuthenticatorTransport: TypeAlias = Literal["usb", "nfc", "ble", "cable", "internal"]
 
@@ -30,8 +30,13 @@ class VirtualAuthenticatorOptions(TypedDict):
     hasCredBlob: NotRequired[bool]
     hasMinPinLength: NotRequired[bool]
     hasPrf: NotRequired[bool]
+    hasHmacSecret: NotRequired[bool]
+    hasHmacSecretMc: NotRequired[bool]
+    hasCmtgKey: NotRequired[bool]
     automaticPresenceSimulation: NotRequired[bool]
     isUserVerified: NotRequired[bool]
+    defaultBackupEligibility: NotRequired[bool]
+    defaultBackupState: NotRequired[bool]
 
 
 class Credential(TypedDict):
@@ -40,8 +45,15 @@ class Credential(TypedDict):
     rpId: NotRequired[str]
     privateKey: str
     userHandle: NotRequired[str]
-    signCount: int
+    signCount: NotRequired[int]
     largeBlob: NotRequired[str]
+    backupEligibility: NotRequired[bool]
+    backupState: NotRequired[bool]
+    userName: NotRequired[str]
+    userDisplayName: NotRequired[str]
+    cmtgKeys: NotRequired[list[str]]
+    activeCmtgKeyIndex: NotRequired[int]
+    generateCmtgKeyOnNextOperation: NotRequired[bool]
 
 
 class EnableParameters(TypedDict):
@@ -108,7 +120,27 @@ class SetAutomaticPresenceSimulationParameters(TypedDict):
     enabled: bool
 
 
+class SetCredentialPropertiesParameters(TypedDict):
+    authenticatorId: AuthenticatorId
+    credentialId: str
+    backupEligibility: NotRequired[bool]
+    backupState: NotRequired[bool]
+    activeCmtgKeyIndex: NotRequired[int]
+    generateCmtgKeyOnNextOperation: NotRequired[bool]
+    signCount: NotRequired[int]
+
+
 class CredentialAddedEvent(TypedDict):
+    authenticatorId: AuthenticatorId
+    credential: Credential
+
+
+class CredentialDeletedEvent(TypedDict):
+    authenticatorId: AuthenticatorId
+    credentialId: str
+
+
+class CredentialUpdatedEvent(TypedDict):
     authenticatorId: AuthenticatorId
     credential: Credential
 
@@ -422,6 +454,33 @@ class WebAuthn(BaseDomain):
         )
 
     @overload
+    async def setCredentialProperties(
+        self,
+        params: SetCredentialPropertiesParameters,
+        session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def setCredentialProperties(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[SetCredentialPropertiesParameters],
+    ) -> JsonObject: ...
+
+    async def setCredentialProperties(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> JsonObject:
+        """Allows setting credential properties. https://w3c.github.io/webauthn/#sctn-automation-set-credential-properties"""
+
+        return await self._command(
+            "setCredentialProperties", params, session_id, kwargs
+        )
+
+    @overload
     def credentialAdded(
         self,
         callback_or_session: EventCallback[CredentialAddedEvent],
@@ -461,6 +520,104 @@ class WebAuthn(BaseDomain):
             Awaitable[CredentialAddedEvent] | Unsubscribe,
             self._event(
                 "credentialAdded",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def credentialDeleted(
+        self,
+        callback_or_session: EventCallback[CredentialDeletedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def credentialDeleted(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[CredentialDeletedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def credentialDeleted(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[CredentialDeletedEvent]: ...
+
+    def credentialDeleted(
+        self,
+        callback_or_session: EventCallback[CredentialDeletedEvent] | str | None = None,
+        handler: EventCallback[CredentialDeletedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[CredentialDeletedEvent] | Unsubscribe:
+        """Triggered when a credential is deleted, e.g. through PublicKeyCredential.signalUnknownCredential()."""
+
+        return cast(
+            Awaitable[CredentialDeletedEvent] | Unsubscribe,
+            self._event(
+                "credentialDeleted",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def credentialUpdated(
+        self,
+        callback_or_session: EventCallback[CredentialUpdatedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def credentialUpdated(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[CredentialUpdatedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def credentialUpdated(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[CredentialUpdatedEvent]: ...
+
+    def credentialUpdated(
+        self,
+        callback_or_session: EventCallback[CredentialUpdatedEvent] | str | None = None,
+        handler: EventCallback[CredentialUpdatedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[CredentialUpdatedEvent] | Unsubscribe:
+        """Triggered when a credential is updated, e.g. through PublicKeyCredential.signalCurrentUserDetails()."""
+
+        return cast(
+            Awaitable[CredentialUpdatedEvent] | Unsubscribe,
+            self._event(
+                "credentialUpdated",
                 cast(
                     EventCallback[Mapping[str, object]] | str | None,
                     callback_or_session,
@@ -531,6 +688,8 @@ __all__ = [
     "Credential",
     "CredentialAddedEvent",
     "CredentialAssertedEvent",
+    "CredentialDeletedEvent",
+    "CredentialUpdatedEvent",
     "Ctap2Version",
     "EnableParameters",
     "GetCredentialParameters",
@@ -540,6 +699,7 @@ __all__ = [
     "RemoveCredentialParameters",
     "RemoveVirtualAuthenticatorParameters",
     "SetAutomaticPresenceSimulationParameters",
+    "SetCredentialPropertiesParameters",
     "SetResponseOverrideBitsParameters",
     "SetUserVerifiedParameters",
     "VirtualAuthenticatorOptions",

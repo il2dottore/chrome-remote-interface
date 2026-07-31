@@ -31,32 +31,44 @@ class Bounds(TypedDict):
 
 
 PermissionType: TypeAlias = Literal[
-    "accessibilityEvents",
+    "ar",
     "audioCapture",
-    "backgroundSync",
+    "automaticFullscreen",
     "backgroundFetch",
+    "backgroundSync",
+    "cameraPanTiltZoom",
+    "capturedSurfaceControl",
     "clipboardReadWrite",
     "clipboardSanitizedWrite",
     "displayCapture",
     "durableStorage",
-    "flash",
     "geolocation",
+    "handTracking",
     "idleDetection",
+    "keyboardLock",
     "localFonts",
+    "localNetwork",
+    "localNetworkAccess",
+    "loopbackNetwork",
     "midi",
     "midiSysex",
     "nfc",
     "notifications",
     "paymentHandler",
     "periodicBackgroundSync",
+    "pointerLock",
     "protectedMediaIdentifier",
     "sensors",
+    "smartCard",
+    "speakerSelection",
     "storageAccess",
     "topLevelStorageAccess",
     "videoCapture",
-    "videoCapturePanTiltZoom",
+    "vr",
     "wakeLockScreen",
     "wakeLockSystem",
+    "webAppInstallation",
+    "webPrinting",
     "windowManagement",
 ]
 
@@ -68,10 +80,11 @@ class PermissionDescriptor(TypedDict):
     sysex: NotRequired[bool]
     userVisibleOnly: NotRequired[bool]
     allowWithoutSanitization: NotRequired[bool]
+    allowWithoutGesture: NotRequired[bool]
     panTiltZoom: NotRequired[bool]
 
 
-BrowserCommandId: TypeAlias = Literal["openTabSearch", "closeTabSearch"]
+BrowserCommandId: TypeAlias = Literal["openTabSearch", "closeTabSearch", "openGlic"]
 
 
 class Bucket(TypedDict):
@@ -91,6 +104,7 @@ class SetPermissionParameters(TypedDict):
     permission: PermissionDescriptor
     setting: PermissionSetting
     origin: NotRequired[str]
+    embeddedOrigin: NotRequired[str]
     browserContextId: NotRequired[BrowserContextID]
 
 
@@ -168,6 +182,12 @@ class SetWindowBoundsParameters(TypedDict):
     bounds: Bounds
 
 
+class SetContentsSizeParameters(TypedDict):
+    windowId: WindowID
+    width: NotRequired[int]
+    height: NotRequired[int]
+
+
 class SetDockTileParameters(TypedDict):
     badgeLabel: NotRequired[str]
     image: NotRequired[str]
@@ -193,6 +213,7 @@ class DownloadProgressEvent(TypedDict):
     totalBytes: float
     receivedBytes: float
     state: Literal["inProgress", "completed", "canceled"]
+    filePath: NotRequired[str]
 
 
 class Browser(BaseDomain):
@@ -221,7 +242,7 @@ class Browser(BaseDomain):
         session_id: str | None = None,
         **kwargs: object,
     ) -> JsonObject:
-        """Set permission settings for given origin."""
+        """Set permission settings for given embedding and embedded origins."""
 
         return await self._command("setPermission", params, session_id, kwargs)
 
@@ -246,7 +267,7 @@ class Browser(BaseDomain):
         session_id: str | None = None,
         **kwargs: object,
     ) -> JsonObject:
-        """Grant specific permissions to the given origin and reject all others."""
+        """Grant specific permissions to the given origin and reject all others. Deprecated. Use setPermission instead."""
 
         return await self._command("grantPermissions", params, session_id, kwargs)
 
@@ -508,6 +529,31 @@ class Browser(BaseDomain):
         return await self._command("setWindowBounds", params, session_id, kwargs)
 
     @overload
+    async def setContentsSize(
+        self,
+        params: SetContentsSizeParameters,
+        session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def setContentsSize(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[SetContentsSizeParameters],
+    ) -> JsonObject: ...
+
+    async def setContentsSize(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> JsonObject:
+        """Set size of the browser contents resizing browser window as necessary."""
+
+        return await self._command("setContentsSize", params, session_id, kwargs)
+
+    @overload
     async def setDockTile(
         self,
         params: SetDockTileParameters,
@@ -710,6 +756,7 @@ __all__ = [
     "PermissionSetting",
     "PermissionType",
     "ResetPermissionsParameters",
+    "SetContentsSizeParameters",
     "SetDockTileParameters",
     "SetDownloadBehaviorParameters",
     "SetPermissionParameters",

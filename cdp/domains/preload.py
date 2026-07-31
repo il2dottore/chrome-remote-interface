@@ -28,11 +28,14 @@ class RuleSet(TypedDict):
     requestId: NotRequired[Network.RequestId]
     errorType: NotRequired[RuleSetErrorType]
     errorMessage: NotRequired[str]
+    tag: NotRequired[str]
 
 
-RuleSetErrorType: TypeAlias = Literal["SourceIsNotJsonObject", "InvalidRulesSkipped"]
+RuleSetErrorType: TypeAlias = Literal[
+    "SourceIsNotJsonObject", "InvalidRulesSkipped", "InvalidRulesetLevelTag"
+]
 
-SpeculationAction: TypeAlias = Literal["Prefetch", "Prerender"]
+SpeculationAction: TypeAlias = Literal["Prefetch", "Prerender", "PrerenderUntilScript"]
 
 SpeculationTargetHint: TypeAlias = Literal["Blank", "Self"]
 
@@ -41,6 +44,7 @@ class PreloadingAttemptKey(TypedDict):
     loaderId: Network.LoaderId
     action: SpeculationAction
     url: str
+    formSubmission: NotRequired[bool]
     targetHint: NotRequired[SpeculationTargetHint]
 
 
@@ -50,15 +54,15 @@ class PreloadingAttemptSource(TypedDict):
     nodeIds: list[DOM.BackendNodeId]
 
 
+PreloadPipelineId: TypeAlias = str
+
 PrerenderFinalStatus: TypeAlias = Literal[
     "Activated",
     "Destroyed",
     "LowEndDevice",
     "InvalidSchemeRedirect",
     "InvalidSchemeNavigation",
-    "InProgressNavigation",
     "NavigationRequestBlockedByCsp",
-    "MainFrameNavigation",
     "MojoBinderPolicy",
     "RendererProcessCrashed",
     "RendererProcessKilled",
@@ -68,7 +72,6 @@ PrerenderFinalStatus: TypeAlias = Literal[
     "NavigationBadHttpStatus",
     "ClientCertRequested",
     "NavigationRequestNetworkError",
-    "MaxNumOfRunningPrerendersExceeded",
     "CancelAllHostsForTesting",
     "DidFailLoad",
     "Stop",
@@ -80,9 +83,8 @@ PrerenderFinalStatus: TypeAlias = Literal[
     "MixedContent",
     "TriggerBackgrounded",
     "MemoryLimitExceeded",
-    "FailToGetMemoryUsage",
     "DataSaverEnabled",
-    "HasEffectiveUrl",
+    "TriggerUrlHasEffectiveUrl",
     "ActivatedBeforeStarted",
     "InactivePageRestriction",
     "StartFailed",
@@ -111,9 +113,26 @@ PrerenderFinalStatus: TypeAlias = Literal[
     "MemoryPressureOnTrigger",
     "MemoryPressureAfterTriggered",
     "PrerenderingDisabledByDevTools",
-    "ResourceLoadBlockedByClient",
     "SpeculationRuleRemoved",
     "ActivatedWithAuxiliaryBrowsingContexts",
+    "MaxNumOfRunningEagerPrerendersExceeded",
+    "MaxNumOfRunningNonEagerPrerendersExceeded",
+    "MaxNumOfRunningEmbedderPrerendersExceeded",
+    "PrerenderingUrlHasEffectiveUrl",
+    "RedirectedPrerenderingUrlHasEffectiveUrl",
+    "ActivationUrlHasEffectiveUrl",
+    "JavaScriptInterfaceAdded",
+    "JavaScriptInterfaceRemoved",
+    "AllPrerenderingCanceled",
+    "WindowClosed",
+    "SlowNetwork",
+    "OtherPrerenderedPageActivated",
+    "V8OptimizerDisabled",
+    "PrerenderFailedDuringPrefetch",
+    "BrowsingDataRemoved",
+    "PrerenderHostReused",
+    "FormSubmitWhenPrerendering",
+    "CrossDocumentRestart",
 ]
 
 PreloadingStatus: TypeAlias = Literal[
@@ -127,12 +146,14 @@ PrefetchStatus: TypeAlias = Literal[
     "PrefetchFailedMIMENotSupported",
     "PrefetchFailedNetError",
     "PrefetchFailedNon2XX",
-    "PrefetchFailedPerPageLimitExceeded",
-    "PrefetchEvicted",
+    "PrefetchEvictedAfterBrowsingDataRemoved",
+    "PrefetchEvictedAfterCandidateRemoved",
+    "PrefetchEvictedForNewerPrefetch",
     "PrefetchHeldback",
     "PrefetchIneligibleRetryAfter",
     "PrefetchIsPrivacyDecoy",
     "PrefetchIsStale",
+    "PrefetchNotEligibleBlockedByConnectionAllowlist",
     "PrefetchNotEligibleBrowserContextOffTheRecord",
     "PrefetchNotEligibleDataSaverEnabled",
     "PrefetchNotEligibleExistingProxy",
@@ -142,6 +163,9 @@ PrefetchStatus: TypeAlias = Literal[
     "PrefetchNotEligibleSchemeIsNotHttps",
     "PrefetchNotEligibleUserHasCookies",
     "PrefetchNotEligibleUserHasServiceWorker",
+    "PrefetchNotEligibleUserHasServiceWorkerNoFetchHandler",
+    "PrefetchNotEligibleRedirectFromServiceWorker",
+    "PrefetchNotEligibleRedirectToServiceWorker",
     "PrefetchNotEligibleBatterySaverEnabled",
     "PrefetchNotEligiblePreloadingDisabled",
     "PrefetchNotFinishedInTime",
@@ -151,7 +175,14 @@ PrefetchStatus: TypeAlias = Literal[
     "PrefetchResponseUsed",
     "PrefetchSuccessfulButNotUsed",
     "PrefetchNotUsedProbeFailed",
+    "PrefetchCancelledOnUserNavigation",
 ]
+
+
+class PrerenderMismatchedHeaders(TypedDict):
+    headerName: str
+    initialValue: NotRequired[str]
+    activationValue: NotRequired[str]
 
 
 class RuleSetUpdatedEvent(TypedDict):
@@ -160,14 +191,6 @@ class RuleSetUpdatedEvent(TypedDict):
 
 class RuleSetRemovedEvent(TypedDict):
     id: RuleSetId
-
-
-class PrerenderAttemptCompletedEvent(TypedDict):
-    key: PreloadingAttemptKey
-    initiatingFrameId: Page.FrameId
-    prerenderingUrl: str
-    finalStatus: PrerenderFinalStatus
-    disallowedApiMethod: NotRequired[str]
 
 
 class PreloadEnabledStateUpdatedEvent(TypedDict):
@@ -180,6 +203,7 @@ class PreloadEnabledStateUpdatedEvent(TypedDict):
 
 class PrefetchStatusUpdatedEvent(TypedDict):
     key: PreloadingAttemptKey
+    pipelineId: PreloadPipelineId
     initiatingFrameId: Page.FrameId
     prefetchUrl: str
     status: PreloadingStatus
@@ -189,9 +213,11 @@ class PrefetchStatusUpdatedEvent(TypedDict):
 
 class PrerenderStatusUpdatedEvent(TypedDict):
     key: PreloadingAttemptKey
+    pipelineId: PreloadPipelineId
     status: PreloadingStatus
     prerenderStatus: NotRequired[PrerenderFinalStatus]
     disallowedMojoInterface: NotRequired[str]
+    mismatchedHeaders: NotRequired[list[PrerenderMismatchedHeaders]]
 
 
 class PreloadingAttemptSourcesUpdatedEvent(TypedDict):
@@ -309,57 +335,6 @@ class Preload(BaseDomain):
             Awaitable[RuleSetRemovedEvent] | Unsubscribe,
             self._event(
                 "ruleSetRemoved",
-                cast(
-                    EventCallback[Mapping[str, object]] | str | None,
-                    callback_or_session,
-                ),
-                cast(EventCallback[Mapping[str, object]] | None, handler),
-                session_id,
-            ),
-        )
-
-    @overload
-    def prerenderAttemptCompleted(
-        self,
-        callback_or_session: EventCallback[PrerenderAttemptCompletedEvent],
-        handler: None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Unsubscribe: ...
-
-    @overload
-    def prerenderAttemptCompleted(
-        self,
-        callback_or_session: str,
-        handler: EventCallback[PrerenderAttemptCompletedEvent],
-        *,
-        session_id: str | None = None,
-    ) -> Unsubscribe: ...
-
-    @overload
-    def prerenderAttemptCompleted(
-        self,
-        callback_or_session: str | None = None,
-        handler: None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Awaitable[PrerenderAttemptCompletedEvent]: ...
-
-    def prerenderAttemptCompleted(
-        self,
-        callback_or_session: EventCallback[PrerenderAttemptCompletedEvent]
-        | str
-        | None = None,
-        handler: EventCallback[PrerenderAttemptCompletedEvent] | None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Awaitable[PrerenderAttemptCompletedEvent] | Unsubscribe:
-        """Fired when a prerender attempt is completed."""
-
-        return cast(
-            Awaitable[PrerenderAttemptCompletedEvent] | Unsubscribe,
-            self._event(
-                "prerenderAttemptCompleted",
                 cast(
                     EventCallback[Mapping[str, object]] | str | None,
                     callback_or_session,
@@ -579,12 +554,13 @@ __all__ = [
     "PrefetchStatusUpdatedEvent",
     "Preload",
     "PreloadEnabledStateUpdatedEvent",
+    "PreloadPipelineId",
     "PreloadingAttemptKey",
     "PreloadingAttemptSource",
     "PreloadingAttemptSourcesUpdatedEvent",
     "PreloadingStatus",
-    "PrerenderAttemptCompletedEvent",
     "PrerenderFinalStatus",
+    "PrerenderMismatchedHeaders",
     "PrerenderStatusUpdatedEvent",
     "RuleSet",
     "RuleSetErrorType",

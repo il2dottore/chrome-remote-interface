@@ -92,7 +92,7 @@ class RequestDataParameters(TypedDict):
     storageBucket: NotRequired[Storage.StorageBucket]
     databaseName: str
     objectStoreName: str
-    indexName: str
+    indexName: NotRequired[str]
     skipCount: int
     pageSize: int
     keyRange: NotRequired[KeyRange]

@@ -11,6 +11,7 @@ from cdp.domain import Domain as BaseDomain, EventCallback, Unsubscribe
 from cdp.types import JsonObject, JsonValue
 
 if TYPE_CHECKING:
+    from . import network as Network
     from . import page as Page
     from . import runtime as Runtime
 
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
 NodeId: TypeAlias = int
 
 BackendNodeId: TypeAlias = int
+
+StyleSheetId: TypeAlias = str
 
 
 class BackendNode(TypedDict):
@@ -29,16 +32,25 @@ class BackendNode(TypedDict):
 PseudoType: TypeAlias = Literal[
     "first-line",
     "first-letter",
+    "checkmark",
     "before",
     "after",
+    "expand-icon",
+    "picker-icon",
+    "interest-button",
     "marker",
     "backdrop",
+    "column",
     "selection",
+    "search-text",
     "target-text",
     "spelling-error",
     "grammar-error",
     "highlight",
     "first-line-inherited",
+    "scroll-marker",
+    "scroll-marker-group",
+    "scroll-button",
     "scrollbar",
     "scrollbar-thumb",
     "scrollbar-button",
@@ -50,8 +62,18 @@ PseudoType: TypeAlias = Literal[
     "view-transition",
     "view-transition-group",
     "view-transition-image-pair",
+    "view-transition-group-children",
     "view-transition-old",
     "view-transition-new",
+    "placeholder",
+    "file-selector-button",
+    "details-content",
+    "picker",
+    "select-listbox",
+    "permission-icon",
+    "overscroll-area-parent",
+    "overscroll-backdrop",
+    "skeleton",
 ]
 
 ShadowRootType: TypeAlias = Literal["user-agent", "open", "closed"]
@@ -63,6 +85,8 @@ CompatibilityMode: TypeAlias = Literal[
 PhysicalAxes: TypeAlias = Literal["Horizontal", "Vertical", "Both"]
 
 LogicalAxes: TypeAlias = Literal["Inline", "Block", "Both"]
+
+ScrollOrientation: TypeAlias = Literal["horizontal", "vertical"]
 
 
 class Node(TypedDict):
@@ -97,6 +121,15 @@ class Node(TypedDict):
     isSVG: NotRequired[bool]
     compatibilityMode: NotRequired[CompatibilityMode]
     assignedSlot: NotRequired[BackendNode]
+    isScrollable: NotRequired[bool]
+    affectedByStartingStyles: NotRequired[bool]
+    adoptedStyleSheets: NotRequired[list[StyleSheetId]]
+    adProvenance: NotRequired[Network.AdProvenance]
+
+
+class DetachedElementInfo(TypedDict):
+    treeNode: Node
+    retainedNodeIds: list[NodeId]
 
 
 class RGBA(TypedDict):
@@ -261,6 +294,7 @@ class GetOuterHTMLParameters(TypedDict):
     nodeId: NotRequired[NodeId]
     backendNodeId: NotRequired[BackendNodeId]
     objectId: NotRequired[Runtime.RemoteObjectId]
+    includeShadowDOM: NotRequired[bool]
 
 
 class GetOuterHTMLResult(TypedDict):
@@ -343,6 +377,15 @@ class GetTopLayerElementsResult(TypedDict):
     nodeIds: list[NodeId]
 
 
+class GetElementByRelationParameters(TypedDict):
+    nodeId: NodeId
+    relation: Literal["PopoverTarget", "InterestTarget", "CommandFor"]
+
+
+class GetElementByRelationResult(TypedDict):
+    nodeId: NodeId
+
+
 class RemoveAttributeParameters(TypedDict):
     nodeId: NodeId
     name: str
@@ -416,6 +459,10 @@ class GetFileInfoResult(TypedDict):
     path: str
 
 
+class GetDetachedDomNodesResult(TypedDict):
+    detachedNodes: list[DetachedElementInfo]
+
+
 class SetInspectedNodeParameters(TypedDict):
     nodeId: NodeId
 
@@ -453,6 +500,8 @@ class GetContainerForNodeParameters(TypedDict):
     containerName: NotRequired[str]
     physicalAxes: NotRequired[PhysicalAxes]
     logicalAxes: NotRequired[LogicalAxes]
+    queriesScrollState: NotRequired[bool]
+    queriesAnchored: NotRequired[bool]
 
 
 class GetContainerForNodeResult(TypedDict):
@@ -467,10 +516,34 @@ class GetQueryingDescendantsForContainerResult(TypedDict):
     nodeIds: list[NodeId]
 
 
+class GetAnchorElementParameters(TypedDict):
+    nodeId: NodeId
+    anchorSpecifier: NotRequired[str]
+
+
+class GetAnchorElementResult(TypedDict):
+    nodeId: NodeId
+
+
+class ForceShowPopoverParameters(TypedDict):
+    nodeId: NodeId
+    enable: bool
+    invokerNodeId: NotRequired[BackendNodeId]
+
+
+class ForceShowPopoverResult(TypedDict):
+    nodeIds: list[NodeId]
+
+
 class AttributeModifiedEvent(TypedDict):
     nodeId: NodeId
     name: str
     value: str
+
+
+class AdoptedStyleSheetsModifiedEvent(TypedDict):
+    nodeId: NodeId
+    adoptedStyleSheets: list[StyleSheetId]
 
 
 class AttributeRemovedEvent(TypedDict):
@@ -511,6 +584,21 @@ class InlineStyleInvalidatedEvent(TypedDict):
 class PseudoElementAddedEvent(TypedDict):
     parentId: NodeId
     pseudoElement: Node
+
+
+class ScrollableFlagUpdatedEvent(TypedDict):
+    nodeId: NodeId
+    isScrollable: bool
+
+
+class AdRelatedStateUpdatedEvent(TypedDict):
+    nodeId: NodeId
+    adProvenance: NotRequired[Network.AdProvenance]
+
+
+class AffectedByStartingStylesFlagUpdatedEvent(TypedDict):
+    nodeId: NodeId
+    affectedByStartingStyles: bool
 
 
 class PseudoElementRemovedEvent(TypedDict):
@@ -1225,6 +1313,34 @@ class DOM(BaseDomain):
             await self._command("getTopLayerElements", None, session_id, {}),
         )
 
+    @overload
+    async def getElementByRelation(
+        self,
+        params: GetElementByRelationParameters,
+        session_id: str | None = None,
+    ) -> GetElementByRelationResult: ...
+
+    @overload
+    async def getElementByRelation(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[GetElementByRelationParameters],
+    ) -> GetElementByRelationResult: ...
+
+    async def getElementByRelation(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> GetElementByRelationResult:
+        """Returns the NodeId of the matched element according to certain relations."""
+
+        return cast(
+            GetElementByRelationResult,
+            await self._command("getElementByRelation", params, session_id, kwargs),
+        )
+
     async def redo(
         self,
         session_id: str | None = None,
@@ -1522,6 +1638,17 @@ class DOM(BaseDomain):
             await self._command("getFileInfo", params, session_id, kwargs),
         )
 
+    async def getDetachedDomNodes(
+        self,
+        session_id: str | None = None,
+    ) -> GetDetachedDomNodesResult:
+        """Returns list of detached nodes"""
+
+        return cast(
+            GetDetachedDomNodesResult,
+            await self._command("getDetachedDomNodes", None, session_id, {}),
+        )
+
     @overload
     async def setInspectedNode(
         self,
@@ -1682,7 +1809,7 @@ class DOM(BaseDomain):
         session_id: str | None = None,
         **kwargs: object,
     ) -> GetContainerForNodeResult:
-        """Returns the query container of the given node based on container query conditions: containerName, physical, and logical axes. If no axes are provided, the style container is returned, which is the direct parent or the closest element with a matching container-name."""
+        """Returns the query container of the given node based on container query conditions: containerName, physical and logical axes, and whether it queries scroll-state or anchored elements. If no axes are provided and queriesScrollState is false, the style container is returned, which is the direct parent or the closest element with a matching container-name."""
 
         return cast(
             GetContainerForNodeResult,
@@ -1717,6 +1844,62 @@ class DOM(BaseDomain):
             await self._command(
                 "getQueryingDescendantsForContainer", params, session_id, kwargs
             ),
+        )
+
+    @overload
+    async def getAnchorElement(
+        self,
+        params: GetAnchorElementParameters,
+        session_id: str | None = None,
+    ) -> GetAnchorElementResult: ...
+
+    @overload
+    async def getAnchorElement(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[GetAnchorElementParameters],
+    ) -> GetAnchorElementResult: ...
+
+    async def getAnchorElement(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> GetAnchorElementResult:
+        """Returns the target anchor element of the given anchor query according to https://www.w3.org/TR/css-anchor-position-1/#target."""
+
+        return cast(
+            GetAnchorElementResult,
+            await self._command("getAnchorElement", params, session_id, kwargs),
+        )
+
+    @overload
+    async def forceShowPopover(
+        self,
+        params: ForceShowPopoverParameters,
+        session_id: str | None = None,
+    ) -> ForceShowPopoverResult: ...
+
+    @overload
+    async def forceShowPopover(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[ForceShowPopoverParameters],
+    ) -> ForceShowPopoverResult: ...
+
+    async def forceShowPopover(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> ForceShowPopoverResult:
+        """When enabling, this API force-opens the popover identified by nodeId and keeps it open until disabled."""
+
+        return cast(
+            ForceShowPopoverResult,
+            await self._command("forceShowPopover", params, session_id, kwargs),
         )
 
     @overload
@@ -1759,6 +1942,57 @@ class DOM(BaseDomain):
             Awaitable[AttributeModifiedEvent] | Unsubscribe,
             self._event(
                 "attributeModified",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def adoptedStyleSheetsModified(
+        self,
+        callback_or_session: EventCallback[AdoptedStyleSheetsModifiedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def adoptedStyleSheetsModified(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[AdoptedStyleSheetsModifiedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def adoptedStyleSheetsModified(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[AdoptedStyleSheetsModifiedEvent]: ...
+
+    def adoptedStyleSheetsModified(
+        self,
+        callback_or_session: EventCallback[AdoptedStyleSheetsModifiedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[AdoptedStyleSheetsModifiedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[AdoptedStyleSheetsModifiedEvent] | Unsubscribe:
+        """Fired when `Element`'s adoptedStyleSheets are modified."""
+
+        return cast(
+            Awaitable[AdoptedStyleSheetsModifiedEvent] | Unsubscribe,
+            self._event(
+                "adoptedStyleSheetsModified",
                 cast(
                     EventCallback[Mapping[str, object]] | str | None,
                     callback_or_session,
@@ -2255,6 +2489,159 @@ class DOM(BaseDomain):
         )
 
     @overload
+    def scrollableFlagUpdated(
+        self,
+        callback_or_session: EventCallback[ScrollableFlagUpdatedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def scrollableFlagUpdated(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[ScrollableFlagUpdatedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def scrollableFlagUpdated(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[ScrollableFlagUpdatedEvent]: ...
+
+    def scrollableFlagUpdated(
+        self,
+        callback_or_session: EventCallback[ScrollableFlagUpdatedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[ScrollableFlagUpdatedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[ScrollableFlagUpdatedEvent] | Unsubscribe:
+        """Fired when a node's scrollability state changes."""
+
+        return cast(
+            Awaitable[ScrollableFlagUpdatedEvent] | Unsubscribe,
+            self._event(
+                "scrollableFlagUpdated",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def adRelatedStateUpdated(
+        self,
+        callback_or_session: EventCallback[AdRelatedStateUpdatedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def adRelatedStateUpdated(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[AdRelatedStateUpdatedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def adRelatedStateUpdated(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[AdRelatedStateUpdatedEvent]: ...
+
+    def adRelatedStateUpdated(
+        self,
+        callback_or_session: EventCallback[AdRelatedStateUpdatedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[AdRelatedStateUpdatedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[AdRelatedStateUpdatedEvent] | Unsubscribe:
+        """Fired when a node's ad related state changes."""
+
+        return cast(
+            Awaitable[AdRelatedStateUpdatedEvent] | Unsubscribe,
+            self._event(
+                "adRelatedStateUpdated",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def affectedByStartingStylesFlagUpdated(
+        self,
+        callback_or_session: EventCallback[AffectedByStartingStylesFlagUpdatedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def affectedByStartingStylesFlagUpdated(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[AffectedByStartingStylesFlagUpdatedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def affectedByStartingStylesFlagUpdated(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[AffectedByStartingStylesFlagUpdatedEvent]: ...
+
+    def affectedByStartingStylesFlagUpdated(
+        self,
+        callback_or_session: EventCallback[AffectedByStartingStylesFlagUpdatedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[AffectedByStartingStylesFlagUpdatedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[AffectedByStartingStylesFlagUpdatedEvent] | Unsubscribe:
+        """Fired when a node's starting styles changes."""
+
+        return cast(
+            Awaitable[AffectedByStartingStylesFlagUpdatedEvent] | Unsubscribe,
+            self._event(
+                "affectedByStartingStylesFlagUpdated",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
     def pseudoElementRemoved(
         self,
         callback_or_session: EventCallback[PseudoElementRemovedEvent],
@@ -2456,6 +2843,9 @@ class DOM(BaseDomain):
 __all__ = [
     "DOM",
     "RGBA",
+    "AdRelatedStateUpdatedEvent",
+    "AdoptedStyleSheetsModifiedEvent",
+    "AffectedByStartingStylesFlagUpdatedEvent",
     "AttributeModifiedEvent",
     "AttributeRemovedEvent",
     "BackendNode",
@@ -2473,10 +2863,15 @@ __all__ = [
     "CopyToResult",
     "DescribeNodeParameters",
     "DescribeNodeResult",
+    "DetachedElementInfo",
     "DiscardSearchResultsParameters",
     "DistributedNodesUpdatedEvent",
     "EnableParameters",
     "FocusParameters",
+    "ForceShowPopoverParameters",
+    "ForceShowPopoverResult",
+    "GetAnchorElementParameters",
+    "GetAnchorElementResult",
     "GetAttributesParameters",
     "GetAttributesResult",
     "GetBoxModelParameters",
@@ -2485,8 +2880,11 @@ __all__ = [
     "GetContainerForNodeResult",
     "GetContentQuadsParameters",
     "GetContentQuadsResult",
+    "GetDetachedDomNodesResult",
     "GetDocumentParameters",
     "GetDocumentResult",
+    "GetElementByRelationParameters",
+    "GetElementByRelationResult",
     "GetFileInfoParameters",
     "GetFileInfoResult",
     "GetFlattenedDocumentParameters",
@@ -2538,6 +2936,8 @@ __all__ = [
     "ResolveNodeParameters",
     "ResolveNodeResult",
     "ScrollIntoViewIfNeededParameters",
+    "ScrollOrientation",
+    "ScrollableFlagUpdatedEvent",
     "SetAttributeValueParameters",
     "SetAttributesAsTextParameters",
     "SetChildNodesEvent",
@@ -2552,4 +2952,5 @@ __all__ = [
     "ShadowRootPushedEvent",
     "ShadowRootType",
     "ShapeOutsideInfo",
+    "StyleSheetId",
 ]

@@ -33,11 +33,6 @@ class AdFrameStatus(TypedDict):
     explanations: NotRequired[list[AdFrameExplanation]]
 
 
-class AdScriptId(TypedDict):
-    scriptId: Runtime.ScriptId
-    debuggerId: Runtime.UniqueDebuggerId
-
-
 SecureContextType: TypeAlias = Literal[
     "Secure", "SecureLocalhost", "InsecureScheme", "InsecureAncestor"
 ]
@@ -55,27 +50,32 @@ GatedAPIFeatures: TypeAlias = Literal[
 
 PermissionsPolicyFeature: TypeAlias = Literal[
     "accelerometer",
+    "all-screens-capture",
     "ambient-light-sensor",
-    "attribution-reporting",
+    "aria-notify",
+    "autofill",
     "autoplay",
     "bluetooth",
     "browsing-topics",
     "camera",
+    "captured-surface-control",
     "ch-dpr",
     "ch-device-memory",
     "ch-downlink",
     "ch-ect",
     "ch-prefers-color-scheme",
     "ch-prefers-reduced-motion",
+    "ch-prefers-reduced-transparency",
     "ch-rtt",
     "ch-save-data",
     "ch-ua",
     "ch-ua-arch",
     "ch-ua-bitness",
+    "ch-ua-high-entropy-values",
     "ch-ua-platform",
     "ch-ua-model",
     "ch-ua-mobile",
-    "ch-ua-form-factor",
+    "ch-ua-form-factors",
     "ch-ua-full-version",
     "ch-ua-full-version-list",
     "ch-ua-platform-version",
@@ -86,8 +86,15 @@ PermissionsPolicyFeature: TypeAlias = Literal[
     "clipboard-read",
     "clipboard-write",
     "compute-pressure",
+    "controlled-frame",
     "cross-origin-isolated",
+    "deferred-fetch",
+    "deferred-fetch-minimal",
+    "device-attributes",
+    "digital-credentials-create",
+    "digital-credentials-get",
     "direct-sockets",
+    "direct-sockets-multicast",
     "display-capture",
     "document-domain",
     "encrypted-media",
@@ -105,32 +112,51 @@ PermissionsPolicyFeature: TypeAlias = Literal[
     "interest-cohort",
     "join-ad-interest-group",
     "keyboard-map",
+    "language-detector",
+    "language-model",
     "local-fonts",
+    "local-network",
+    "local-network-access",
+    "loopback-network",
     "magnetometer",
+    "manual-text",
+    "media-playback-while-not-visible",
     "microphone",
     "midi",
+    "on-device-speech-recognition",
     "otp-credentials",
     "payment",
     "picture-in-picture",
     "private-aggregation",
     "private-state-token-issuance",
     "private-state-token-redemption",
+    "publickey-credentials-create",
     "publickey-credentials-get",
+    "record-ad-auction-events",
+    "rewriter",
     "run-ad-auction",
     "screen-wake-lock",
     "serial",
-    "shared-autofill",
     "shared-storage",
     "shared-storage-select-url",
     "smart-card",
+    "speaker-selection",
     "storage-access",
+    "sub-apps",
+    "summarizer",
     "sync-xhr",
+    "tools",
+    "translator",
     "unload",
     "usb",
+    "usb-unrestricted",
     "vertical-scroll",
+    "web-app-installation",
+    "webnn",
+    "web-printing",
     "web-share",
     "window-management",
-    "window-placement",
+    "writer",
     "xr-spatial-tracking",
 ]
 
@@ -193,6 +219,10 @@ class OriginTrial(TypedDict):
     tokensWithStatus: list[OriginTrialTokenWithStatus]
 
 
+class SecurityOriginDetails(TypedDict):
+    isLocalhost: bool
+
+
 class Frame(TypedDict):
     id: FrameId
     parentId: NotRequired[FrameId]
@@ -202,6 +232,7 @@ class Frame(TypedDict):
     urlFragment: NotRequired[str]
     domainAndRegistry: str
     securityOrigin: str
+    securityOriginDetails: NotRequired[SecurityOriginDetails]
     mimeType: str
     unreachableUrl: NotRequired[str]
     adFrameStatus: NotRequired[AdFrameStatus]
@@ -329,14 +360,16 @@ class FontSizes(TypedDict):
 
 
 ClientNavigationReason: TypeAlias = Literal[
+    "anchorClick",
     "formSubmissionGet",
     "formSubmissionPost",
     "httpHeaderRefresh",
-    "scriptInitiated",
+    "initialFrameNavigation",
     "metaTagRefresh",
+    "other",
     "pageBlockInterstitial",
     "reload",
-    "anchorClick",
+    "scriptInitiated",
 ]
 
 ClientNavigationDisposition: TypeAlias = Literal[
@@ -371,7 +404,90 @@ class CompilationCacheParams(TypedDict):
     eager: NotRequired[bool]
 
 
-AutoResponseMode: TypeAlias = Literal["none", "autoAccept", "autoReject", "autoOptOut"]
+class FileFilter(TypedDict):
+    name: NotRequired[str]
+    accepts: NotRequired[list[str]]
+
+
+class FileHandler(TypedDict):
+    action: str
+    name: str
+    icons: NotRequired[list[ImageResource]]
+    accepts: NotRequired[list[FileFilter]]
+    launchType: str
+
+
+class ImageResource(TypedDict):
+    url: str
+    sizes: NotRequired[str]
+    type: NotRequired[str]
+
+
+class LaunchHandler(TypedDict):
+    clientMode: str
+
+
+class ProtocolHandler(TypedDict):
+    protocol: str
+    url: str
+
+
+class RelatedApplication(TypedDict):
+    id: NotRequired[str]
+    url: str
+
+
+class ScopeExtension(TypedDict):
+    origin: str
+    hasOriginWildcard: bool
+
+
+class Screenshot(TypedDict):
+    image: ImageResource
+    formFactor: str
+    label: NotRequired[str]
+
+
+class ShareTarget(TypedDict):
+    action: str
+    method: str
+    enctype: str
+    title: NotRequired[str]
+    text: NotRequired[str]
+    url: NotRequired[str]
+    files: NotRequired[list[FileFilter]]
+
+
+class Shortcut(TypedDict):
+    name: str
+    url: str
+
+
+class WebAppManifest(TypedDict):
+    backgroundColor: NotRequired[str]
+    description: NotRequired[str]
+    dir: NotRequired[str]
+    display: NotRequired[str]
+    displayOverrides: NotRequired[list[str]]
+    fileHandlers: NotRequired[list[FileHandler]]
+    icons: NotRequired[list[ImageResource]]
+    id: NotRequired[str]
+    lang: NotRequired[str]
+    launchHandler: NotRequired[LaunchHandler]
+    name: NotRequired[str]
+    orientation: NotRequired[str]
+    preferRelatedApplications: NotRequired[bool]
+    protocolHandlers: NotRequired[list[ProtocolHandler]]
+    relatedApplications: NotRequired[list[RelatedApplication]]
+    scope: NotRequired[str]
+    scopeExtensions: NotRequired[list[ScopeExtension]]
+    screenshots: NotRequired[list[Screenshot]]
+    shareTarget: NotRequired[ShareTarget]
+    shortName: NotRequired[str]
+    shortcuts: NotRequired[list[Shortcut]]
+    startUrl: NotRequired[str]
+    themeColor: NotRequired[str]
+
 
 NavigationType: TypeAlias = Literal["Navigation", "BackForwardCacheRestore"]
 
@@ -416,6 +532,7 @@ BackForwardCacheNotRestoredReason: TypeAlias = Literal[
     "BackForwardCacheDisabledForPrerender",
     "UserAgentOverrideDiffers",
     "ForegroundCacheLimit",
+    "ForwardCacheDisabled",
     "BrowsingInstanceNotSwapped",
     "BackForwardCacheDisabledForDelegate",
     "UnloadHandlerExistsInMainFrame",
@@ -432,6 +549,12 @@ BackForwardCacheNotRestoredReason: TypeAlias = Literal[
     "CookieDisabled",
     "HTTPAuthRequired",
     "CookieFlushed",
+    "BroadcastChannelOnMessage",
+    "WebViewSettingsChanged",
+    "WebViewJavaScriptObjectChanged",
+    "WebViewMessageListenerInjected",
+    "WebViewSafeBrowsingAllowlistChanged",
+    "WebViewDocumentStartJavascriptChanged",
     "WebSocket",
     "WebTransport",
     "WebRTC",
@@ -441,7 +564,6 @@ BackForwardCacheNotRestoredReason: TypeAlias = Literal[
     "SubresourceHasCacheControlNoCache",
     "ContainsPlugins",
     "DocumentLoaded",
-    "DedicatedWorkerOrWorklet",
     "OutstandingNetworkRequestOthers",
     "RequestedMIDIPermission",
     "RequestedAudioCapturePermission",
@@ -451,8 +573,12 @@ BackForwardCacheNotRestoredReason: TypeAlias = Literal[
     "BroadcastChannel",
     "WebXR",
     "SharedWorker",
+    "SharedWorkerMessage",
+    "SharedWorkerWithNoActiveClient",
     "WebLocks",
+    "WebLocksContention",
     "WebHID",
+    "WebBluetooth",
     "WebShare",
     "RequestedStorageAccessGrant",
     "WebNfc",
@@ -462,7 +588,6 @@ BackForwardCacheNotRestoredReason: TypeAlias = Literal[
     "Printing",
     "WebDatabase",
     "PictureInPicture",
-    "Portal",
     "SpeechRecognizer",
     "IdleManager",
     "PaymentManager",
@@ -476,9 +601,13 @@ BackForwardCacheNotRestoredReason: TypeAlias = Literal[
     "IndexedDBEvent",
     "Dummy",
     "JsNetworkRequestReceivedCacheControlNoStoreResource",
-    "WebRTCSticky",
-    "WebTransportSticky",
-    "WebSocketSticky",
+    "WebRTCUsedWithCCNS",
+    "WebTransportUsedWithCCNS",
+    "WebSocketUsedWithCCNS",
+    "SmartCard",
+    "LiveMediaStreamTrack",
+    "UnloadHandler",
+    "ParserAborted",
     "ContentSecurityHandler",
     "ContentWebAuthenticationAPI",
     "ContentFileChooser",
@@ -489,6 +618,7 @@ BackForwardCacheNotRestoredReason: TypeAlias = Literal[
     "ContentWebUSB",
     "ContentMediaSessionService",
     "ContentScreenReader",
+    "ContentDiscarded",
     "EmbedderPopupBlockerTabHelper",
     "EmbedderSafeBrowsingTriggeredPopupBlocker",
     "EmbedderSafeBrowsingThreatDetails",
@@ -504,6 +634,12 @@ BackForwardCacheNotRestoredReason: TypeAlias = Literal[
     "EmbedderExtensionMessaging",
     "EmbedderExtensionMessagingForOpenPort",
     "EmbedderExtensionSentMessageToCachedFrame",
+    "EmbedderExtensionFrame",
+    "RequestedByWebViewClient",
+    "PostMessageByWebViewClient",
+    "CacheControlNoStoreDeviceBoundSessionTerminated",
+    "CacheLimitPrunedOnModerateMemoryPressure",
+    "CacheLimitPrunedOnCriticalMemoryPressure",
 ]
 
 BackForwardCacheNotRestoredReasonType: TypeAlias = Literal[
@@ -511,10 +647,18 @@ BackForwardCacheNotRestoredReasonType: TypeAlias = Literal[
 ]
 
 
+class BackForwardCacheBlockingDetails(TypedDict):
+    url: NotRequired[str]
+    function: NotRequired[str]
+    lineNumber: int
+    columnNumber: int
+
+
 class BackForwardCacheNotRestoredExplanation(TypedDict):
     type: BackForwardCacheNotRestoredReasonType
     reason: BackForwardCacheNotRestoredReason
     context: NotRequired[str]
+    details: NotRequired[list[BackForwardCacheBlockingDetails]]
 
 
 class BackForwardCacheNotRestoredExplanationTree(TypedDict):
@@ -567,6 +711,7 @@ class CreateIsolatedWorldParameters(TypedDict):
     frameId: FrameId
     worldName: NotRequired[str]
     grantUniveralAccess: NotRequired[bool]
+    contentSecurityPolicy: NotRequired[str]
 
 
 class CreateIsolatedWorldResult(TypedDict):
@@ -578,11 +723,20 @@ class DeleteCookieParameters(TypedDict):
     url: str
 
 
+class EnableParameters(TypedDict):
+    enableFileChooserOpenedEvent: NotRequired[bool]
+
+
+class GetAppManifestParameters(TypedDict):
+    manifestId: NotRequired[str]
+
+
 class GetAppManifestResult(TypedDict):
     url: str
     errors: list[AppManifestError]
     data: NotRequired[str]
     parsed: NotRequired[AppManifestParsedProperties]
+    manifest: WebAppManifest
 
 
 class GetInstallabilityErrorsResult(TypedDict):
@@ -598,16 +752,12 @@ class GetAppIdResult(TypedDict):
     recommendedId: NotRequired[str]
 
 
-class GetAdScriptIdParameters(TypedDict):
+class GetAdScriptAncestryParameters(TypedDict):
     frameId: FrameId
 
 
-class GetAdScriptIdResult(TypedDict):
-    adScriptId: NotRequired[AdScriptId]
-
-
-class GetCookiesResult(TypedDict):
-    cookies: list[Network.Cookie]
+class GetAdScriptAncestryResult(TypedDict):
+    adScriptAncestry: NotRequired[Network.AdAncestry]
 
 
 class GetFrameTreeResult(TypedDict):
@@ -659,6 +809,7 @@ class NavigateResult(TypedDict):
     frameId: FrameId
     loaderId: NotRequired[Network.LoaderId]
     errorText: NotRequired[str]
+    isDownload: NotRequired[bool]
 
 
 class NavigateToHistoryEntryParameters(TypedDict):
@@ -681,6 +832,8 @@ class PrintToPDFParameters(TypedDict):
     footerTemplate: NotRequired[str]
     preferCSSPageSize: NotRequired[bool]
     transferMode: NotRequired[Literal["ReturnAsBase64", "ReturnAsStream"]]
+    generateTaggedPDF: NotRequired[bool]
+    generateDocumentOutline: NotRequired[bool]
 
 
 class PrintToPDFResult(TypedDict):
@@ -691,6 +844,7 @@ class PrintToPDFResult(TypedDict):
 class ReloadParameters(TypedDict):
     ignoreCache: NotRequired[bool]
     scriptToEvaluateOnLoad: NotRequired[str]
+    loaderId: NotRequired[Network.LoaderId]
 
 
 class RemoveScriptToEvaluateOnLoadParameters(TypedDict):
@@ -818,11 +972,13 @@ class AddCompilationCacheParameters(TypedDict):
 
 
 class SetSPCTransactionModeParameters(TypedDict):
-    mode: AutoResponseMode
+    mode: Literal[
+        "none", "autoAccept", "autoChooseToAuthAnotherWay", "autoReject", "autoOptOut"
+    ]
 
 
 class SetRPHRegistrationModeParameters(TypedDict):
-    mode: AutoResponseMode
+    mode: Literal["none", "autoAccept", "autoReject"]
 
 
 class GenerateTestReportParameters(TypedDict):
@@ -832,10 +988,19 @@ class GenerateTestReportParameters(TypedDict):
 
 class SetInterceptFileChooserDialogParameters(TypedDict):
     enabled: bool
+    cancel: NotRequired[bool]
 
 
 class SetPrerenderingAllowedParameters(TypedDict):
     isAllowed: bool
+
+
+class GetAnnotatedPageContentParameters(TypedDict):
+    includeActionableInformation: NotRequired[bool]
+
+
+class GetAnnotatedPageContentResult(TypedDict):
+    content: str
 
 
 class DomContentEventFiredEvent(TypedDict):
@@ -863,6 +1028,10 @@ class FrameDetachedEvent(TypedDict):
     reason: Literal["remove", "swap"]
 
 
+class FrameSubtreeWillBeDetachedEvent(TypedDict):
+    frameId: FrameId
+
+
 class FrameNavigatedEvent(TypedDict):
     frame: Frame
     type: NavigationType
@@ -870,6 +1039,22 @@ class FrameNavigatedEvent(TypedDict):
 
 class DocumentOpenedEvent(TypedDict):
     frame: Frame
+
+
+class FrameStartedNavigatingEvent(TypedDict):
+    frameId: FrameId
+    url: str
+    loaderId: Network.LoaderId
+    navigationType: Literal[
+        "reload",
+        "reloadBypassingCache",
+        "restore",
+        "restoreWithPost",
+        "historySameDocument",
+        "historyDifferentDocument",
+        "sameDocument",
+        "differentDocument",
+    ]
 
 
 class FrameRequestedNavigationEvent(TypedDict):
@@ -909,12 +1094,14 @@ class DownloadProgressEvent(TypedDict):
 
 
 class JavascriptDialogClosedEvent(TypedDict):
+    frameId: FrameId
     result: bool
     userInput: str
 
 
 class JavascriptDialogOpeningEvent(TypedDict):
     url: str
+    frameId: FrameId
     message: str
     type: DialogType
     hasBrowserHandler: bool
@@ -942,6 +1129,7 @@ class LoadEventFiredEvent(TypedDict):
 class NavigatedWithinDocumentEvent(TypedDict):
     frameId: FrameId
     url: str
+    navigationType: Literal["fragment", "historyApi", "other"]
 
 
 class ScreencastFrameEvent(TypedDict):
@@ -1182,23 +1370,57 @@ class Page(BaseDomain):
 
         return await self._command("disable", None, session_id, {})
 
+    @overload
     async def enable(
         self,
+        params: EnableParameters,
         session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def enable(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[EnableParameters],
+    ) -> JsonObject: ...
+
+    async def enable(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
     ) -> JsonObject:
         """Enables page domain notifications."""
 
-        return await self._command("enable", None, session_id, {})
+        return await self._command("enable", params, session_id, kwargs)
+
+    @overload
+    async def getAppManifest(
+        self,
+        params: GetAppManifestParameters,
+        session_id: str | None = None,
+    ) -> GetAppManifestResult: ...
+
+    @overload
+    async def getAppManifest(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[GetAppManifestParameters],
+    ) -> GetAppManifestResult: ...
 
     async def getAppManifest(
         self,
+        params: Mapping[str, object] | str | None = None,
         session_id: str | None = None,
+        **kwargs: object,
     ) -> GetAppManifestResult:
-        """Send Page.getAppManifest."""
+        """Gets the processed manifest for this current document. This API always waits for the manifest to be loaded. If manifestId is provided, and it does not match the manifest of the current document, this API errors out. If there is not a loaded page, this API errors out immediately."""
 
         return cast(
             GetAppManifestResult,
-            await self._command("getAppManifest", None, session_id, {}),
+            await self._command("getAppManifest", params, session_id, kwargs),
         )
 
     async def getInstallabilityErrors(
@@ -1234,41 +1456,31 @@ class Page(BaseDomain):
         )
 
     @overload
-    async def getAdScriptId(
+    async def getAdScriptAncestry(
         self,
-        params: GetAdScriptIdParameters,
+        params: GetAdScriptAncestryParameters,
         session_id: str | None = None,
-    ) -> GetAdScriptIdResult: ...
+    ) -> GetAdScriptAncestryResult: ...
 
     @overload
-    async def getAdScriptId(
+    async def getAdScriptAncestry(
         self,
         params: str | None = None,
         session_id: str | None = None,
-        **kwargs: Unpack[GetAdScriptIdParameters],
-    ) -> GetAdScriptIdResult: ...
+        **kwargs: Unpack[GetAdScriptAncestryParameters],
+    ) -> GetAdScriptAncestryResult: ...
 
-    async def getAdScriptId(
+    async def getAdScriptAncestry(
         self,
         params: Mapping[str, object] | str | None = None,
         session_id: str | None = None,
         **kwargs: object,
-    ) -> GetAdScriptIdResult:
-        """Send Page.getAdScriptId."""
+    ) -> GetAdScriptAncestryResult:
+        """Send Page.getAdScriptAncestry."""
 
         return cast(
-            GetAdScriptIdResult,
-            await self._command("getAdScriptId", params, session_id, kwargs),
-        )
-
-    async def getCookies(
-        self,
-        session_id: str | None = None,
-    ) -> GetCookiesResult:
-        """Returns all browser cookies for the page and all of its subframes. Depending on the backend support, will return detailed cookie information in the `cookies` field."""
-
-        return cast(
-            GetCookiesResult, await self._command("getCookies", None, session_id, {})
+            GetAdScriptAncestryResult,
+            await self._command("getAdScriptAncestry", params, session_id, kwargs),
         )
 
     async def getFrameTree(
@@ -2032,7 +2244,7 @@ class Page(BaseDomain):
         session_id: str | None = None,
         **kwargs: object,
     ) -> JsonObject:
-        """Requests backend to produce compilation cache for the specified scripts. `scripts` are appeneded to the list of scripts for which the cache would be produced. The list may be reset during page navigation. When script with a matching URL is encountered, the cache is optionally produced upon backend discretion, based on internal heuristics. See also: `Page.compilationCacheProduced`."""
+        """Requests backend to produce compilation cache for the specified scripts. `scripts` are appended to the list of scripts for which the cache would be produced. The list may be reset during page navigation. When script with a matching URL is encountered, the cache is optionally produced upon backend discretion, based on internal heuristics. See also: `Page.compilationCacheProduced`."""
 
         return await self._command(
             "produceCompilationCache", params, session_id, kwargs
@@ -2205,6 +2417,34 @@ class Page(BaseDomain):
         """Enable/disable prerendering manually. This command is a short-term solution for https://crbug.com/1440085. See https://docs.google.com/document/d/12HVmFxYj5Jc-eJr5OmWsa2bqTJsbgGLKI6ZIyx0_wpA for more details. TODO(https://crbug.com/1440085): Remove this once Puppeteer supports tab targets."""
 
         return await self._command("setPrerenderingAllowed", params, session_id, kwargs)
+
+    @overload
+    async def getAnnotatedPageContent(
+        self,
+        params: GetAnnotatedPageContentParameters,
+        session_id: str | None = None,
+    ) -> GetAnnotatedPageContentResult: ...
+
+    @overload
+    async def getAnnotatedPageContent(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[GetAnnotatedPageContentParameters],
+    ) -> GetAnnotatedPageContentResult: ...
+
+    async def getAnnotatedPageContent(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> GetAnnotatedPageContentResult:
+        """Get the annotated page content for the main frame. This is an experimental command that is subject to change."""
+
+        return cast(
+            GetAnnotatedPageContentResult,
+            await self._command("getAnnotatedPageContent", params, session_id, kwargs),
+        )
 
     @overload
     def domContentEventFired(
@@ -2456,6 +2696,57 @@ class Page(BaseDomain):
         )
 
     @overload
+    def frameSubtreeWillBeDetached(
+        self,
+        callback_or_session: EventCallback[FrameSubtreeWillBeDetachedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def frameSubtreeWillBeDetached(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[FrameSubtreeWillBeDetachedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def frameSubtreeWillBeDetached(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[FrameSubtreeWillBeDetachedEvent]: ...
+
+    def frameSubtreeWillBeDetached(
+        self,
+        callback_or_session: EventCallback[FrameSubtreeWillBeDetachedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[FrameSubtreeWillBeDetachedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[FrameSubtreeWillBeDetachedEvent] | Unsubscribe:
+        """Fired before frame subtree is detached. Emitted before any frame of the subtree is actually detached."""
+
+        return cast(
+            Awaitable[FrameSubtreeWillBeDetachedEvent] | Unsubscribe,
+            self._event(
+                "frameSubtreeWillBeDetached",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
     def frameNavigated(
         self,
         callback_or_session: EventCallback[FrameNavigatedEvent],
@@ -2594,6 +2885,57 @@ class Page(BaseDomain):
             cast(EventCallback[Mapping[str, object]] | str | None, callback_or_session),
             cast(EventCallback[Mapping[str, object]] | None, handler),
             session_id,
+        )
+
+    @overload
+    def frameStartedNavigating(
+        self,
+        callback_or_session: EventCallback[FrameStartedNavigatingEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def frameStartedNavigating(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[FrameStartedNavigatingEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def frameStartedNavigating(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[FrameStartedNavigatingEvent]: ...
+
+    def frameStartedNavigating(
+        self,
+        callback_or_session: EventCallback[FrameStartedNavigatingEvent]
+        | str
+        | None = None,
+        handler: EventCallback[FrameStartedNavigatingEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[FrameStartedNavigatingEvent] | Unsubscribe:
+        """Fired when a navigation starts. This event is fired for both renderer-initiated and browser-initiated navigations. For renderer-initiated navigations, the event is fired after `frameRequestedNavigation`. Navigation may still be cancelled after the event is issued. Multiple events can be fired for a single navigation, for example, when a same-document navigation becomes a cross-document navigation (such as in the case of a frameset)."""
+
+        return cast(
+            Awaitable[FrameStartedNavigatingEvent] | Unsubscribe,
+            self._event(
+                "frameStartedNavigating",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
         )
 
     @overload
@@ -3120,7 +3462,7 @@ class Page(BaseDomain):
         *,
         session_id: str | None = None,
     ) -> Awaitable[LifecycleEventEvent] | Unsubscribe:
-        """Fired for top level page lifecycle events such as navigation, load, paint, etc."""
+        """Fired for lifecycle events (navigation, load, paint, etc) in the current target (including local frames)."""
 
         return cast(
             Awaitable[LifecycleEventEvent] | Unsubscribe,
@@ -3471,7 +3813,7 @@ class Page(BaseDomain):
         *,
         session_id: str | None = None,
     ) -> Awaitable[CompilationCacheProducedEvent] | Unsubscribe:
-        """Issued for every compilation cache generated. Is only available if Page.setGenerateCompilationCache is enabled."""
+        """Issued for every compilation cache generated."""
 
         return cast(
             Awaitable[CompilationCacheProducedEvent] | Unsubscribe,
@@ -3491,7 +3833,6 @@ __all__ = [
     "AdFrameExplanation",
     "AdFrameStatus",
     "AdFrameType",
-    "AdScriptId",
     "AddCompilationCacheParameters",
     "AddScriptToEvaluateOnLoadParameters",
     "AddScriptToEvaluateOnLoadResult",
@@ -3499,7 +3840,7 @@ __all__ = [
     "AddScriptToEvaluateOnNewDocumentResult",
     "AppManifestError",
     "AppManifestParsedProperties",
-    "AutoResponseMode",
+    "BackForwardCacheBlockingDetails",
     "BackForwardCacheNotRestoredExplanation",
     "BackForwardCacheNotRestoredExplanationTree",
     "BackForwardCacheNotRestoredReason",
@@ -3522,7 +3863,10 @@ __all__ = [
     "DomContentEventFiredEvent",
     "DownloadProgressEvent",
     "DownloadWillBeginEvent",
+    "EnableParameters",
     "FileChooserOpenedEvent",
+    "FileFilter",
+    "FileHandler",
     "FontFamilies",
     "FontSizes",
     "Frame",
@@ -3536,15 +3880,19 @@ __all__ = [
     "FrameResourceTree",
     "FrameScheduledNavigationEvent",
     "FrameStartedLoadingEvent",
+    "FrameStartedNavigatingEvent",
     "FrameStoppedLoadingEvent",
+    "FrameSubtreeWillBeDetachedEvent",
     "FrameTree",
     "GatedAPIFeatures",
     "GenerateTestReportParameters",
-    "GetAdScriptIdParameters",
-    "GetAdScriptIdResult",
+    "GetAdScriptAncestryParameters",
+    "GetAdScriptAncestryResult",
+    "GetAnnotatedPageContentParameters",
+    "GetAnnotatedPageContentResult",
     "GetAppIdResult",
+    "GetAppManifestParameters",
     "GetAppManifestResult",
-    "GetCookiesResult",
     "GetFrameTreeResult",
     "GetInstallabilityErrorsResult",
     "GetLayoutMetricsResult",
@@ -3558,10 +3906,12 @@ __all__ = [
     "GetResourceContentResult",
     "GetResourceTreeResult",
     "HandleJavaScriptDialogParameters",
+    "ImageResource",
     "InstallabilityError",
     "InstallabilityErrorArgument",
     "JavascriptDialogClosedEvent",
     "JavascriptDialogOpeningEvent",
+    "LaunchHandler",
     "LayoutViewport",
     "LifecycleEventEvent",
     "LoadEventFiredEvent",
@@ -3585,19 +3935,24 @@ __all__ = [
     "PrintToPDFParameters",
     "PrintToPDFResult",
     "ProduceCompilationCacheParameters",
+    "ProtocolHandler",
     "ReferrerPolicy",
+    "RelatedApplication",
     "ReloadParameters",
     "RemoveScriptToEvaluateOnLoadParameters",
     "RemoveScriptToEvaluateOnNewDocumentParameters",
+    "ScopeExtension",
     "ScreencastFrameAckParameters",
     "ScreencastFrameEvent",
     "ScreencastFrameMetadata",
     "ScreencastVisibilityChangedEvent",
+    "Screenshot",
     "ScriptFontFamilies",
     "ScriptIdentifier",
     "SearchInResourceParameters",
     "SearchInResourceResult",
     "SecureContextType",
+    "SecurityOriginDetails",
     "SetAdBlockingEnabledParameters",
     "SetBypassCSPParameters",
     "SetDeviceMetricsOverrideParameters",
@@ -3614,9 +3969,12 @@ __all__ = [
     "SetSPCTransactionModeParameters",
     "SetTouchEmulationEnabledParameters",
     "SetWebLifecycleStateParameters",
+    "ShareTarget",
+    "Shortcut",
     "StartScreencastParameters",
     "TransitionType",
     "Viewport",
     "VisualViewport",
+    "WebAppManifest",
     "WindowOpenEvent",
 ]

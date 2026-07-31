@@ -26,13 +26,22 @@ class Animation(TypedDict):
     type: Literal["CSSTransition", "CSSAnimation", "WebAnimation"]
     source: NotRequired[AnimationEffect]
     cssId: NotRequired[str]
+    viewOrScrollTimeline: NotRequired[ViewOrScrollTimeline]
+
+
+class ViewOrScrollTimeline(TypedDict):
+    sourceNodeId: NotRequired[DOM.BackendNodeId]
+    startOffset: NotRequired[float]
+    endOffset: NotRequired[float]
+    subjectNodeId: NotRequired[DOM.BackendNodeId]
+    axis: DOM.ScrollOrientation
 
 
 class AnimationEffect(TypedDict):
     delay: float
     endDelay: float
     iterationStart: float
-    iterations: float
+    iterations: NotRequired[float]
     duration: float
     direction: str
     fill: str
@@ -104,6 +113,10 @@ class AnimationCreatedEvent(TypedDict):
 
 
 class AnimationStartedEvent(TypedDict):
+    animation: Animation
+
+
+class AnimationUpdatedEvent(TypedDict):
     animation: Animation
 
 
@@ -467,6 +480,55 @@ class AnimationDomain(BaseDomain):
             ),
         )
 
+    @overload
+    def animationUpdated(
+        self,
+        callback_or_session: EventCallback[AnimationUpdatedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def animationUpdated(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[AnimationUpdatedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def animationUpdated(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[AnimationUpdatedEvent]: ...
+
+    def animationUpdated(
+        self,
+        callback_or_session: EventCallback[AnimationUpdatedEvent] | str | None = None,
+        handler: EventCallback[AnimationUpdatedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[AnimationUpdatedEvent] | Unsubscribe:
+        """Event for animation that has been updated."""
+
+        return cast(
+            Awaitable[AnimationUpdatedEvent] | Unsubscribe,
+            self._event(
+                "animationUpdated",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
 
 __all__ = [
     "Animation",
@@ -475,6 +537,7 @@ __all__ = [
     "AnimationDomain",
     "AnimationEffect",
     "AnimationStartedEvent",
+    "AnimationUpdatedEvent",
     "GetCurrentTimeParameters",
     "GetCurrentTimeResult",
     "GetPlaybackRateResult",
@@ -487,4 +550,5 @@ __all__ = [
     "SetPausedParameters",
     "SetPlaybackRateParameters",
     "SetTimingParameters",
+    "ViewOrScrollTimeline",
 ]

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Mapping
-from typing import Literal, TypeAlias, cast, overload
+from typing import TYPE_CHECKING, Literal, TypeAlias, cast, overload
 
-from typing_extensions import TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 from cdp.domain import Domain as BaseDomain, EventCallback, Unsubscribe
 from cdp.types import JsonObject
+
+if TYPE_CHECKING:
+    from . import dom as DOM
 
 
 PlayerId: TypeAlias = str
@@ -44,6 +47,11 @@ class PlayerError(TypedDict):
     data: JsonObject
 
 
+class Player(TypedDict):
+    playerId: PlayerId
+    domNodeId: NotRequired[DOM.BackendNodeId]
+
+
 class PlayerPropertiesChangedEvent(TypedDict):
     playerId: PlayerId
     properties: list[PlayerProperty]
@@ -64,12 +72,12 @@ class PlayerErrorsRaisedEvent(TypedDict):
     errors: list[PlayerError]
 
 
-class PlayersCreatedEvent(TypedDict):
-    players: list[PlayerId]
+class PlayerCreatedEvent(TypedDict):
+    player: Player
 
 
 class Media(BaseDomain):
-    """This domain allows detailed inspection of media elements"""
+    """This domain allows detailed inspection of media elements."""
 
     domain_name = "Media"
 
@@ -290,45 +298,45 @@ class Media(BaseDomain):
         )
 
     @overload
-    def playersCreated(
+    def playerCreated(
         self,
-        callback_or_session: EventCallback[PlayersCreatedEvent],
+        callback_or_session: EventCallback[PlayerCreatedEvent],
         handler: None = None,
         *,
         session_id: str | None = None,
     ) -> Unsubscribe: ...
 
     @overload
-    def playersCreated(
+    def playerCreated(
         self,
         callback_or_session: str,
-        handler: EventCallback[PlayersCreatedEvent],
+        handler: EventCallback[PlayerCreatedEvent],
         *,
         session_id: str | None = None,
     ) -> Unsubscribe: ...
 
     @overload
-    def playersCreated(
+    def playerCreated(
         self,
         callback_or_session: str | None = None,
         handler: None = None,
         *,
         session_id: str | None = None,
-    ) -> Awaitable[PlayersCreatedEvent]: ...
+    ) -> Awaitable[PlayerCreatedEvent]: ...
 
-    def playersCreated(
+    def playerCreated(
         self,
-        callback_or_session: EventCallback[PlayersCreatedEvent] | str | None = None,
-        handler: EventCallback[PlayersCreatedEvent] | None = None,
+        callback_or_session: EventCallback[PlayerCreatedEvent] | str | None = None,
+        handler: EventCallback[PlayerCreatedEvent] | None = None,
         *,
         session_id: str | None = None,
-    ) -> Awaitable[PlayersCreatedEvent] | Unsubscribe:
-        """Called whenever a player is created, or when a new agent joins and receives a list of active players. If an agent is restored, it will receive the full list of player ids and all events again."""
+    ) -> Awaitable[PlayerCreatedEvent] | Unsubscribe:
+        """Called whenever a player is created, or when a new agent joins and receives a list of active players. If an agent is restored, it will receive one event for each active player."""
 
         return cast(
-            Awaitable[PlayersCreatedEvent] | Unsubscribe,
+            Awaitable[PlayerCreatedEvent] | Unsubscribe,
             self._event(
-                "playersCreated",
+                "playerCreated",
                 cast(
                     EventCallback[Mapping[str, object]] | str | None,
                     callback_or_session,
@@ -341,6 +349,8 @@ class Media(BaseDomain):
 
 __all__ = [
     "Media",
+    "Player",
+    "PlayerCreatedEvent",
     "PlayerError",
     "PlayerErrorSourceLocation",
     "PlayerErrorsRaisedEvent",
@@ -351,6 +361,5 @@ __all__ = [
     "PlayerMessagesLoggedEvent",
     "PlayerPropertiesChangedEvent",
     "PlayerProperty",
-    "PlayersCreatedEvent",
     "Timestamp",
 ]

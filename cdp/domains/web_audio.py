@@ -15,7 +15,7 @@ GraphObjectId: TypeAlias = str
 
 ContextType: TypeAlias = Literal["realtime", "offline"]
 
-ContextState: TypeAlias = Literal["suspended", "running", "closed"]
+ContextState: TypeAlias = Literal["suspended", "running", "closed", "interrupted"]
 
 NodeType: TypeAlias = str
 

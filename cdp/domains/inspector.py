@@ -171,5 +171,48 @@ class Inspector(BaseDomain):
             session_id,
         )
 
+    @overload
+    def workerScriptLoaded(
+        self,
+        callback_or_session: EventCallback[JsonObject],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def workerScriptLoaded(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[JsonObject],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def workerScriptLoaded(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[JsonObject]: ...
+
+    def workerScriptLoaded(
+        self,
+        callback_or_session: EventCallback[JsonObject] | str | None = None,
+        handler: EventCallback[JsonObject] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[JsonObject] | Unsubscribe:
+        """Fired on worker targets when main worker script and any imported scripts have been evaluated."""
+
+        return self._event(
+            "workerScriptLoaded",
+            cast(EventCallback[Mapping[str, object]] | str | None, callback_or_session),
+            cast(EventCallback[Mapping[str, object]] | None, handler),
+            session_id,
+        )
+
 
 __all__ = ["DetachedEvent", "Inspector"]

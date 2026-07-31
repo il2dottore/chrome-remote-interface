@@ -49,6 +49,10 @@ class GetCategoriesResult(TypedDict):
     categories: list[str]
 
 
+class GetTrackEventDescriptorResult(TypedDict):
+    descriptor: str
+
+
 class RecordClockSyncMarkerParameters(TypedDict):
     syncId: str
 
@@ -73,6 +77,8 @@ class StartParameters(TypedDict):
     traceConfig: NotRequired[TraceConfig]
     perfettoConfig: NotRequired[str]
     tracingBackend: NotRequired[TracingBackend]
+    screenshotMaxSize: NotRequired[int]
+    screenshotMaxCount: NotRequired[int]
 
 
 class BufferUsageEvent(TypedDict):
@@ -114,6 +120,17 @@ class Tracing(BaseDomain):
         return cast(
             GetCategoriesResult,
             await self._command("getCategories", None, session_id, {}),
+        )
+
+    async def getTrackEventDescriptor(
+        self,
+        session_id: str | None = None,
+    ) -> GetTrackEventDescriptorResult:
+        """Return a descriptor for all available tracing categories."""
+
+        return cast(
+            GetTrackEventDescriptorResult,
+            await self._command("getTrackEventDescriptor", None, session_id, {}),
         )
 
     @overload
@@ -346,6 +363,7 @@ __all__ = [
     "BufferUsageEvent",
     "DataCollectedEvent",
     "GetCategoriesResult",
+    "GetTrackEventDescriptorResult",
     "MemoryDumpConfig",
     "MemoryDumpLevelOfDetail",
     "RecordClockSyncMarkerParameters",

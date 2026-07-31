@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Mapping
-from typing import TYPE_CHECKING, TypeAlias, cast, overload
+from typing import TYPE_CHECKING, Literal, TypeAlias, cast, overload
 
 from typing_extensions import NotRequired, TypedDict, Unpack
 
@@ -26,11 +26,14 @@ class TargetInfo(TypedDict):
     title: str
     url: str
     attached: bool
+    parentId: NotRequired[TargetID]
     openerId: NotRequired[TargetID]
     canAccessOpener: bool
     openerFrameId: NotRequired[Page.FrameId]
+    parentFrameId: NotRequired[Page.FrameId]
     browserContextId: NotRequired[Browser.BrowserContextID]
     subtype: NotRequired[str]
+    embedderData: NotRequired[JsonObject]
 
 
 class FilterEntry(TypedDict):
@@ -44,6 +47,9 @@ TargetFilter: TypeAlias = list[FilterEntry]
 class RemoteLocation(TypedDict):
     host: str
     port: int
+
+
+WindowState: TypeAlias = Literal["normal", "minimized", "maximized", "fullscreen"]
 
 
 class ActivateTargetParameters(TypedDict):
@@ -74,6 +80,7 @@ class CloseTargetResult(TypedDict):
 class ExposeDevToolsProtocolParameters(TypedDict):
     targetId: TargetID
     bindingName: NotRequired[str]
+    inheritPermissions: NotRequired[bool]
 
 
 class CreateBrowserContextParameters(TypedDict):
@@ -89,17 +96,23 @@ class CreateBrowserContextResult(TypedDict):
 
 class GetBrowserContextsResult(TypedDict):
     browserContextIds: list[Browser.BrowserContextID]
+    defaultBrowserContextId: NotRequired[Browser.BrowserContextID]
 
 
 class CreateTargetParameters(TypedDict):
     url: str
+    left: NotRequired[int]
+    top: NotRequired[int]
     width: NotRequired[int]
     height: NotRequired[int]
+    windowState: NotRequired[WindowState]
     browserContextId: NotRequired[Browser.BrowserContextID]
     enableBeginFrameControl: NotRequired[bool]
     newWindow: NotRequired[bool]
     background: NotRequired[bool]
     forTab: NotRequired[bool]
+    hidden: NotRequired[bool]
+    focus: NotRequired[bool]
 
 
 class CreateTargetResult(TypedDict):
@@ -157,6 +170,23 @@ class SetDiscoverTargetsParameters(TypedDict):
 
 class SetRemoteLocationsParameters(TypedDict):
     locations: list[RemoteLocation]
+
+
+class GetDevToolsTargetParameters(TypedDict):
+    targetId: TargetID
+
+
+class GetDevToolsTargetResult(TypedDict):
+    targetId: NotRequired[TargetID]
+
+
+class OpenDevToolsParameters(TypedDict):
+    targetId: TargetID
+    panelId: NotRequired[str]
+
+
+class OpenDevToolsResult(TypedDict):
+    targetId: TargetID
 
 
 class AttachedToTargetEvent(TypedDict):
@@ -312,7 +342,7 @@ class Target(BaseDomain):
         session_id: str | None = None,
         **kwargs: object,
     ) -> JsonObject:
-        """Inject object to the target's main frame that provides a communication channel with browser target. Injected object will be available as `window[bindingName]`. The object has the follwing API: - `binding.send(json)` - a method to send messages over the remote debugging protocol - `binding.onmessage = json => handleMessage(json)` - a callback that will be called for the protocol notifications and command responses."""
+        """Inject object to the target's main frame that provides a communication channel with browser target. Injected object will be available as `window[bindingName]`. The object has the following API: - `binding.send(json)` - a method to send messages over the remote debugging protocol - `binding.onmessage = json => handleMessage(json)` - a callback that will be called for the protocol notifications and command responses."""
 
         return await self._command("exposeDevToolsProtocol", params, session_id, kwargs)
 
@@ -535,7 +565,7 @@ class Target(BaseDomain):
         session_id: str | None = None,
         **kwargs: object,
     ) -> JsonObject:
-        """Controls whether to automatically attach to new targets which are considered to be related to this one. When turned on, attaches to all existing related targets as well. When turned off, automatically detaches from all currently attached targets. This also clears all targets added by `autoAttachRelated` from the list of targets to watch for creation of related targets."""
+        """Controls whether to automatically attach to new targets which are considered to be directly related to this one (for example, iframes or workers). When turned on, attaches to all existing related targets as well. When turned off, automatically detaches from all currently attached targets. This also clears all targets added by `autoAttachRelated` from the list of targets to watch for creation of related targets. You might want to call this recursively for auto-attached targets to attach to all available targets."""
 
         return await self._command("setAutoAttach", params, session_id, kwargs)
 
@@ -613,6 +643,62 @@ class Target(BaseDomain):
         """Enables target discovery for the specified locations, when `setDiscoverTargets` was set to `true`."""
 
         return await self._command("setRemoteLocations", params, session_id, kwargs)
+
+    @overload
+    async def getDevToolsTarget(
+        self,
+        params: GetDevToolsTargetParameters,
+        session_id: str | None = None,
+    ) -> GetDevToolsTargetResult: ...
+
+    @overload
+    async def getDevToolsTarget(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[GetDevToolsTargetParameters],
+    ) -> GetDevToolsTargetResult: ...
+
+    async def getDevToolsTarget(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> GetDevToolsTargetResult:
+        """Gets the targetId of the DevTools page target opened for the given target (if any)."""
+
+        return cast(
+            GetDevToolsTargetResult,
+            await self._command("getDevToolsTarget", params, session_id, kwargs),
+        )
+
+    @overload
+    async def openDevTools(
+        self,
+        params: OpenDevToolsParameters,
+        session_id: str | None = None,
+    ) -> OpenDevToolsResult: ...
+
+    @overload
+    async def openDevTools(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[OpenDevToolsParameters],
+    ) -> OpenDevToolsResult: ...
+
+    async def openDevTools(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> OpenDevToolsResult:
+        """Opens a DevTools window for the target."""
+
+        return cast(
+            OpenDevToolsResult,
+            await self._command("openDevTools", params, session_id, kwargs),
+        )
 
     @overload
     def attachedToTarget(
@@ -979,10 +1065,14 @@ __all__ = [
     "ExposeDevToolsProtocolParameters",
     "FilterEntry",
     "GetBrowserContextsResult",
+    "GetDevToolsTargetParameters",
+    "GetDevToolsTargetResult",
     "GetTargetInfoParameters",
     "GetTargetInfoResult",
     "GetTargetsParameters",
     "GetTargetsResult",
+    "OpenDevToolsParameters",
+    "OpenDevToolsResult",
     "ReceivedMessageFromTargetEvent",
     "RemoteLocation",
     "SendMessageToTargetParameters",
@@ -998,4 +1088,5 @@ __all__ = [
     "TargetID",
     "TargetInfo",
     "TargetInfoChangedEvent",
+    "WindowState",
 ]

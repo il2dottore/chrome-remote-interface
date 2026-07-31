@@ -42,6 +42,7 @@ class ServiceWorkerVersion(TypedDict):
     scriptResponseTime: NotRequired[float]
     controlledClients: NotRequired[list[Target.TargetID]]
     targetId: NotRequired[Target.TargetID]
+    routerRules: NotRequired[str]
 
 
 class ServiceWorkerErrorMessage(TypedDict):
@@ -70,10 +71,6 @@ class DispatchPeriodicSyncEventParameters(TypedDict):
     origin: str
     registrationId: RegistrationID
     tag: str
-
-
-class InspectWorkerParameters(TypedDict):
-    versionId: str
 
 
 class SetForceUpdateOnPageLoadParameters(TypedDict):
@@ -209,31 +206,6 @@ class ServiceWorker(BaseDomain):
         """Send ServiceWorker.enable."""
 
         return await self._command("enable", None, session_id, {})
-
-    @overload
-    async def inspectWorker(
-        self,
-        params: InspectWorkerParameters,
-        session_id: str | None = None,
-    ) -> JsonObject: ...
-
-    @overload
-    async def inspectWorker(
-        self,
-        params: str | None = None,
-        session_id: str | None = None,
-        **kwargs: Unpack[InspectWorkerParameters],
-    ) -> JsonObject: ...
-
-    async def inspectWorker(
-        self,
-        params: Mapping[str, object] | str | None = None,
-        session_id: str | None = None,
-        **kwargs: object,
-    ) -> JsonObject:
-        """Send ServiceWorker.inspectWorker."""
-
-        return await self._command("inspectWorker", params, session_id, kwargs)
 
     @overload
     async def setForceUpdateOnPageLoad(
@@ -553,7 +525,6 @@ __all__ = [
     "DeliverPushMessageParameters",
     "DispatchPeriodicSyncEventParameters",
     "DispatchSyncEventParameters",
-    "InspectWorkerParameters",
     "RegistrationID",
     "ServiceWorker",
     "ServiceWorkerErrorMessage",

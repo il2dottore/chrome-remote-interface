@@ -129,6 +129,27 @@ class HingeConfig(TypedDict):
     outlineColor: NotRequired[DOM.RGBA]
 
 
+DisplayCutoutShape: TypeAlias = Literal["pill", "notch", "circle", "rectangle"]
+
+
+class DisplayCutoutConfig(TypedDict):
+    rect: DOM.Rect
+    shape: DisplayCutoutShape
+    borderRadius: NotRequired[int]
+    upperRadius: NotRequired[int]
+    lowerRadius: NotRequired[int]
+    cx: NotRequired[int]
+    cy: NotRequired[int]
+    radius: NotRequired[int]
+    contentColor: NotRequired[DOM.RGBA]
+
+
+class WindowControlsOverlayConfig(TypedDict):
+    showCSS: bool
+    selectedPlatform: str
+    themeColor: str
+
+
 class ContainerQueryHighlightConfig(TypedDict):
     containerQueryContainerHighlightConfig: ContainerQueryContainerHighlightConfig
     nodeId: DOM.NodeId
@@ -151,12 +172,13 @@ class IsolationModeHighlightConfig(TypedDict):
 
 
 InspectMode: TypeAlias = Literal[
-    "searchForNode",
-    "searchForUAShadowDOM",
-    "captureAreaScreenshot",
-    "showDistances",
-    "none",
+    "searchForNode", "searchForUAShadowDOM", "captureAreaScreenshot", "none"
 ]
+
+
+class InspectedElementAnchorConfig(TypedDict):
+    nodeId: NotRequired[DOM.NodeId]
+    backendNodeId: NotRequired[DOM.BackendNodeId]
 
 
 class GetHighlightObjectForTestParameters(TypedDict):
@@ -260,6 +282,10 @@ class SetShowContainerQueryOverlaysParameters(TypedDict):
     containerQueryHighlightConfigs: list[ContainerQueryHighlightConfig]
 
 
+class SetShowInspectedElementAnchorParameters(TypedDict):
+    inspectedElementAnchorConfig: InspectedElementAnchorConfig
+
+
 class SetShowPaintRectsParameters(TypedDict):
     result: bool
 
@@ -288,8 +314,16 @@ class SetShowHingeParameters(TypedDict):
     hingeConfig: NotRequired[HingeConfig]
 
 
+class SetShowDisplayCutoutParameters(TypedDict):
+    displayCutoutConfig: NotRequired[DisplayCutoutConfig]
+
+
 class SetShowIsolatedElementsParameters(TypedDict):
     isolatedElementHighlightConfigs: list[IsolatedElementHighlightConfig]
+
+
+class SetShowWindowControlsOverlayParameters(TypedDict):
+    windowControlsOverlayConfig: NotRequired[WindowControlsOverlayConfig]
 
 
 class InspectNodeRequestedEvent(TypedDict):
@@ -302,6 +336,14 @@ class NodeHighlightRequestedEvent(TypedDict):
 
 class ScreenshotRequestedEvent(TypedDict):
     viewport: Page.Viewport
+
+
+class InspectPanelShowRequestedEvent(TypedDict):
+    backendNodeId: DOM.BackendNodeId
+
+
+class InspectedElementWindowRestoredEvent(TypedDict):
+    backendNodeId: DOM.BackendNodeId
 
 
 class Overlay(BaseDomain):
@@ -444,7 +486,7 @@ class Overlay(BaseDomain):
         session_id: str | None = None,
         **kwargs: object,
     ) -> JsonObject:
-        """Highlights owner element of the frame with given id. Deprecated: Doesn't work reliablity and cannot be fixed due to process separatation (the owner node might be in a different process). Determine the owner node in the client and use highlightNode."""
+        """Highlights owner element of the frame with given id. Deprecated: Doesn't work reliably and cannot be fixed due to process separation (the owner node might be in a different process). Determine the owner node in the client and use highlightNode."""
 
         return await self._command("highlightFrame", params, session_id, kwargs)
 
@@ -519,7 +561,7 @@ class Overlay(BaseDomain):
         session_id: str | None = None,
         **kwargs: object,
     ) -> JsonObject:
-        """Highlights given rectangle. Coordinates are absolute with respect to the main frame viewport."""
+        """Highlights given rectangle. Coordinates are absolute with respect to the main frame viewport. Issue: the method does not handle device pixel ratio (DPR) correctly. The coordinates currently have to be adjusted by the client if DPR is not 1 (see crbug.com/437807128)."""
 
         return await self._command("highlightRect", params, session_id, kwargs)
 
@@ -780,6 +822,33 @@ class Overlay(BaseDomain):
         )
 
     @overload
+    async def setShowInspectedElementAnchor(
+        self,
+        params: SetShowInspectedElementAnchorParameters,
+        session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def setShowInspectedElementAnchor(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[SetShowInspectedElementAnchorParameters],
+    ) -> JsonObject: ...
+
+    async def setShowInspectedElementAnchor(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> JsonObject:
+        """Send Overlay.setShowInspectedElementAnchor."""
+
+        return await self._command(
+            "setShowInspectedElementAnchor", params, session_id, kwargs
+        )
+
+    @overload
     async def setShowPaintRects(
         self,
         params: SetShowPaintRectsParameters,
@@ -904,7 +973,7 @@ class Overlay(BaseDomain):
         session_id: str | None = None,
         **kwargs: object,
     ) -> JsonObject:
-        """Request that backend shows an overlay with web vital metrics."""
+        """Deprecated, no longer has any effect."""
 
         return await self._command("setShowWebVitals", params, session_id, kwargs)
 
@@ -961,6 +1030,31 @@ class Overlay(BaseDomain):
         return await self._command("setShowHinge", params, session_id, kwargs)
 
     @overload
+    async def setShowDisplayCutout(
+        self,
+        params: SetShowDisplayCutoutParameters,
+        session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def setShowDisplayCutout(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[SetShowDisplayCutoutParameters],
+    ) -> JsonObject: ...
+
+    async def setShowDisplayCutout(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> JsonObject:
+        """Add a display cutout overlay."""
+
+        return await self._command("setShowDisplayCutout", params, session_id, kwargs)
+
+    @overload
     async def setShowIsolatedElements(
         self,
         params: SetShowIsolatedElementsParameters,
@@ -985,6 +1079,33 @@ class Overlay(BaseDomain):
 
         return await self._command(
             "setShowIsolatedElements", params, session_id, kwargs
+        )
+
+    @overload
+    async def setShowWindowControlsOverlay(
+        self,
+        params: SetShowWindowControlsOverlayParameters,
+        session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def setShowWindowControlsOverlay(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[SetShowWindowControlsOverlayParameters],
+    ) -> JsonObject: ...
+
+    async def setShowWindowControlsOverlay(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> JsonObject:
+        """Show Window Controls Overlay for PWA"""
+
+        return await self._command(
+            "setShowWindowControlsOverlay", params, session_id, kwargs
         )
 
     @overload
@@ -1141,6 +1262,108 @@ class Overlay(BaseDomain):
         )
 
     @overload
+    def inspectPanelShowRequested(
+        self,
+        callback_or_session: EventCallback[InspectPanelShowRequestedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def inspectPanelShowRequested(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[InspectPanelShowRequestedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def inspectPanelShowRequested(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[InspectPanelShowRequestedEvent]: ...
+
+    def inspectPanelShowRequested(
+        self,
+        callback_or_session: EventCallback[InspectPanelShowRequestedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[InspectPanelShowRequestedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[InspectPanelShowRequestedEvent] | Unsubscribe:
+        """Fired when user asks to show the Inspect panel."""
+
+        return cast(
+            Awaitable[InspectPanelShowRequestedEvent] | Unsubscribe,
+            self._event(
+                "inspectPanelShowRequested",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def inspectedElementWindowRestored(
+        self,
+        callback_or_session: EventCallback[InspectedElementWindowRestoredEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def inspectedElementWindowRestored(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[InspectedElementWindowRestoredEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def inspectedElementWindowRestored(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[InspectedElementWindowRestoredEvent]: ...
+
+    def inspectedElementWindowRestored(
+        self,
+        callback_or_session: EventCallback[InspectedElementWindowRestoredEvent]
+        | str
+        | None = None,
+        handler: EventCallback[InspectedElementWindowRestoredEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[InspectedElementWindowRestoredEvent] | Unsubscribe:
+        """Fired when user asks to restore the Inspected Element floating window."""
+
+        return cast(
+            Awaitable[InspectedElementWindowRestoredEvent] | Unsubscribe,
+            self._event(
+                "inspectedElementWindowRestored",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
     def inspectModeCanceled(
         self,
         callback_or_session: EventCallback[JsonObject],
@@ -1190,6 +1413,8 @@ __all__ = [
     "ContainerQueryContainerHighlightConfig",
     "ContainerQueryHighlightConfig",
     "ContrastAlgorithm",
+    "DisplayCutoutConfig",
+    "DisplayCutoutShape",
     "FlexContainerHighlightConfig",
     "FlexItemHighlightConfig",
     "FlexNodeHighlightConfig",
@@ -1210,6 +1435,9 @@ __all__ = [
     "HingeConfig",
     "InspectMode",
     "InspectNodeRequestedEvent",
+    "InspectPanelShowRequestedEvent",
+    "InspectedElementAnchorConfig",
+    "InspectedElementWindowRestoredEvent",
     "IsolatedElementHighlightConfig",
     "IsolationModeHighlightConfig",
     "LineStyle",
@@ -1223,11 +1451,13 @@ __all__ = [
     "SetShowAdHighlightsParameters",
     "SetShowContainerQueryOverlaysParameters",
     "SetShowDebugBordersParameters",
+    "SetShowDisplayCutoutParameters",
     "SetShowFPSCounterParameters",
     "SetShowFlexOverlaysParameters",
     "SetShowGridOverlaysParameters",
     "SetShowHingeParameters",
     "SetShowHitTestBordersParameters",
+    "SetShowInspectedElementAnchorParameters",
     "SetShowIsolatedElementsParameters",
     "SetShowLayoutShiftRegionsParameters",
     "SetShowPaintRectsParameters",
@@ -1235,5 +1465,7 @@ __all__ = [
     "SetShowScrollSnapOverlaysParameters",
     "SetShowViewportSizeOnResizeParameters",
     "SetShowWebVitalsParameters",
+    "SetShowWindowControlsOverlayParameters",
     "SourceOrderConfig",
+    "WindowControlsOverlayConfig",
 ]

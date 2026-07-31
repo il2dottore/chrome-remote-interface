@@ -24,8 +24,8 @@ class AffectedCookie(TypedDict):
 
 
 class AffectedRequest(TypedDict):
-    requestId: Network.RequestId
-    url: NotRequired[str]
+    requestId: NotRequired[Network.RequestId]
+    url: str
 
 
 class AffectedFrame(TypedDict):
@@ -37,10 +37,11 @@ CookieExclusionReason: TypeAlias = Literal[
     "ExcludeSameSiteNoneInsecure",
     "ExcludeSameSiteLax",
     "ExcludeSameSiteStrict",
-    "ExcludeInvalidSameParty",
-    "ExcludeSamePartyCrossPartyContext",
     "ExcludeDomainNonASCII",
     "ExcludeThirdPartyCookieBlockedInFirstPartySet",
+    "ExcludeThirdPartyPhaseout",
+    "ExcludePortMismatch",
+    "ExcludeSchemeMismatch",
 ]
 
 CookieWarningReason: TypeAlias = Literal[
@@ -55,9 +56,19 @@ CookieWarningReason: TypeAlias = Literal[
     "WarnAttributeValueExceedsMaxSize",
     "WarnDomainNonASCII",
     "WarnThirdPartyPhaseout",
+    "WarnCrossSiteRedirectDowngradeChangesInclusion",
+    "WarnDeprecationTrialMetadata",
+    "WarnThirdPartyCookieHeuristic",
 ]
 
 CookieOperation: TypeAlias = Literal["SetCookie", "ReadCookie"]
+
+InsightType: TypeAlias = Literal["GitHubResource", "GracePeriod", "Heuristics"]
+
+
+class CookieIssueInsight(TypedDict):
+    type: InsightType
+    tableEntryUrl: NotRequired[str]
 
 
 class CookieIssueDetails(TypedDict):
@@ -69,6 +80,15 @@ class CookieIssueDetails(TypedDict):
     siteForCookies: NotRequired[str]
     cookieUrl: NotRequired[str]
     request: NotRequired[AffectedRequest]
+    insight: NotRequired[CookieIssueInsight]
+
+
+PerformanceIssueType: TypeAlias = Literal["DocumentCookie"]
+
+
+class PerformanceIssueDetails(TypedDict):
+    performanceIssueType: PerformanceIssueType
+    sourceCodeLocation: NotRequired[SourceCodeLocation]
 
 
 MixedContentResolutionStatus: TypeAlias = Literal[
@@ -76,7 +96,6 @@ MixedContentResolutionStatus: TypeAlias = Literal[
 ]
 
 MixedContentResourceType: TypeAlias = Literal[
-    "AttributionSrc",
     "Audio",
     "Beacon",
     "CSPReport",
@@ -88,6 +107,7 @@ MixedContentResourceType: TypeAlias = Literal[
     "Frame",
     "Image",
     "Import",
+    "JSON",
     "Manifest",
     "Ping",
     "PluginData",
@@ -97,6 +117,7 @@ MixedContentResourceType: TypeAlias = Literal[
     "Script",
     "ServiceWorker",
     "SharedWorker",
+    "SpeculationRules",
     "Stylesheet",
     "Track",
     "Video",
@@ -120,7 +141,10 @@ BlockedByResponseReason: TypeAlias = Literal[
     "CoopSandboxedIFrameCannotNavigateToCoopPage",
     "CorpNotSameOrigin",
     "CorpNotSameOriginAfterDefaultedToSameOriginByCoep",
+    "CorpNotSameOriginAfterDefaultedToSameOriginByDip",
+    "CorpNotSameOriginAfterDefaultedToSameOriginByCoepAndDip",
     "CorpNotSameSite",
+    "SRIMessageSignatureMismatch",
 ]
 
 
@@ -146,6 +170,7 @@ ContentSecurityPolicyViolationType: TypeAlias = Literal[
     "kInlineViolation",
     "kEvalViolation",
     "kURLViolation",
+    "kSRIViolation",
     "kTrustedTypesSinkViolation",
     "kTrustedTypesPolicyViolation",
     "kWasmEvalViolation",
@@ -178,16 +203,6 @@ class SharedArrayBufferIssueDetails(TypedDict):
     type: SharedArrayBufferIssueType
 
 
-class LowTextContrastIssueDetails(TypedDict):
-    violatingNodeId: DOM.BackendNodeId
-    violatingNodeSelector: str
-    contrastRatio: float
-    thresholdAA: float
-    thresholdAAA: float
-    fontSize: str
-    fontWeight: str
-
-
 class CorsIssueDetails(TypedDict):
     corsErrorStatus: Network.CorsErrorStatus
     isWarning: bool
@@ -198,30 +213,78 @@ class CorsIssueDetails(TypedDict):
     clientSecurityState: NotRequired[Network.ClientSecurityState]
 
 
-AttributionReportingIssueType: TypeAlias = Literal[
-    "PermissionPolicyDisabled",
-    "UntrustworthyReportingOrigin",
-    "InsecureContext",
-    "InvalidHeader",
-    "InvalidRegisterTriggerHeader",
-    "SourceAndTriggerHeaders",
-    "SourceIgnored",
-    "TriggerIgnored",
-    "OsSourceIgnored",
-    "OsTriggerIgnored",
-    "InvalidRegisterOsSourceHeader",
-    "InvalidRegisterOsTriggerHeader",
-    "WebAndOsHeaders",
-    "NoWebOrOsSupport",
-    "NavigationRegistrationWithoutTransientUserActivation",
+SharedDictionaryError: TypeAlias = Literal[
+    "UseErrorCrossOriginNoCorsRequest",
+    "UseErrorDictionaryLoadFailure",
+    "UseErrorMatchingDictionaryNotUsed",
+    "UseErrorUnexpectedContentDictionaryHeader",
+    "WriteErrorCossOriginNoCorsRequest",
+    "WriteErrorDisallowedBySettings",
+    "WriteErrorExpiredResponse",
+    "WriteErrorFeatureDisabled",
+    "WriteErrorInsufficientResources",
+    "WriteErrorInvalidMatchField",
+    "WriteErrorInvalidStructuredHeader",
+    "WriteErrorInvalidTTLField",
+    "WriteErrorNavigationRequest",
+    "WriteErrorNoMatchField",
+    "WriteErrorNonIntegerTTLField",
+    "WriteErrorNonListMatchDestField",
+    "WriteErrorNonSecureContext",
+    "WriteErrorNonStringIdField",
+    "WriteErrorNonStringInMatchDestList",
+    "WriteErrorInvalidMatchDestList",
+    "WriteErrorNonStringMatchField",
+    "WriteErrorNonTokenTypeField",
+    "WriteErrorRequestAborted",
+    "WriteErrorShuttingDown",
+    "WriteErrorTooLongIdField",
+    "WriteErrorUnsupportedType",
 ]
 
+SRIMessageSignatureError: TypeAlias = Literal[
+    "MissingSignatureHeader",
+    "MissingSignatureInputHeader",
+    "InvalidSignatureHeader",
+    "InvalidSignatureInputHeader",
+    "SignatureHeaderValueIsNotByteSequence",
+    "SignatureHeaderValueIsParameterized",
+    "SignatureHeaderValueIsIncorrectLength",
+    "SignatureInputHeaderMissingLabel",
+    "SignatureInputHeaderValueNotInnerList",
+    "SignatureInputHeaderValueMissingComponents",
+    "SignatureInputHeaderInvalidComponentType",
+    "SignatureInputHeaderInvalidComponentName",
+    "SignatureInputHeaderInvalidHeaderComponentParameter",
+    "SignatureInputHeaderInvalidDerivedComponentParameter",
+    "SignatureInputHeaderKeyIdLength",
+    "SignatureInputHeaderInvalidParameter",
+    "SignatureInputHeaderMissingRequiredParameters",
+    "ValidationFailedSignatureExpired",
+    "ValidationFailedInvalidLength",
+    "ValidationFailedSignatureMismatch",
+    "ValidationFailedIntegrityMismatch",
+    "SignatureBaseUnknownDerivedComponent",
+    "SignatureBaseMissingHeader",
+    "SignatureBaseInvalidUnencodedDigest",
+    "SignatureBaseUnsupportedComponent",
+]
 
-class AttributionReportingIssueDetails(TypedDict):
-    violationType: AttributionReportingIssueType
-    request: NotRequired[AffectedRequest]
-    violatingNodeId: NotRequired[DOM.BackendNodeId]
-    invalidParameter: NotRequired[str]
+UnencodedDigestError: TypeAlias = Literal[
+    "MalformedDictionary",
+    "UnknownAlgorithm",
+    "IncorrectDigestType",
+    "IncorrectDigestLength",
+]
+
+ConnectionAllowlistError: TypeAlias = Literal[
+    "InvalidHeader",
+    "MoreThanOneList",
+    "ItemNotInnerList",
+    "InvalidAllowlistItemType",
+    "ReportingEndpointNotToken",
+    "InvalidUrlPattern",
+]
 
 
 class QuirksModeIssueDetails(TypedDict):
@@ -237,19 +300,50 @@ class NavigatorUserAgentIssueDetails(TypedDict):
     location: NotRequired[SourceCodeLocation]
 
 
+class SharedDictionaryIssueDetails(TypedDict):
+    sharedDictionaryError: SharedDictionaryError
+    request: AffectedRequest
+
+
+class SRIMessageSignatureIssueDetails(TypedDict):
+    error: SRIMessageSignatureError
+    signatureBase: str
+    integrityAssertions: list[str]
+    request: AffectedRequest
+
+
+class UnencodedDigestIssueDetails(TypedDict):
+    error: UnencodedDigestError
+    request: AffectedRequest
+
+
+class ConnectionAllowlistIssueDetails(TypedDict):
+    error: ConnectionAllowlistError
+    request: AffectedRequest
+
+
 GenericIssueErrorType: TypeAlias = Literal[
-    "CrossOriginPortalPostMessageError",
     "FormLabelForNameError",
     "FormDuplicateIdForInputError",
     "FormInputWithNoLabelError",
     "FormAutocompleteAttributeEmptyError",
     "FormEmptyIdAndNameAttributesForInputError",
-    "FormAriaLabelledByToNonExistingId",
+    "FormAriaLabelledByToNonExistingIdError",
     "FormInputAssignedAutocompleteValueToIdOrNameAttributeError",
-    "FormLabelHasNeitherForNorNestedInput",
+    "FormLabelHasNeitherForNorNestedInputError",
     "FormLabelForMatchesNonExistingIdError",
     "FormInputHasWrongButWellIntendedAutocompleteValueError",
     "ResponseWasBlockedByORB",
+    "NavigationEntryMarkedSkippable",
+    "BackUINavigationWouldSkipAd",
+    "AutofillAndManualTextPolicyControlledFeaturesInfo",
+    "AutofillPolicyControlledFeatureInfo",
+    "ManualTextPolicyControlledFeatureInfo",
+    "FormModelContextParameterMissingTitleAndDescription",
+    "FormModelContextMissingToolName",
+    "FormModelContextMissingToolDescription",
+    "FormModelContextRequiredParameterMissingName",
+    "FormModelContextParameterMissingName",
 ]
 
 
@@ -269,6 +363,13 @@ class DeprecationIssueDetails(TypedDict):
 
 class BounceTrackingIssueDetails(TypedDict):
     trackingSites: list[str]
+
+
+class CookieDeprecationMetadataIssueDetails(TypedDict):
+    allowedSites: list[str]
+    optOutPercentage: float
+    isOptOutTopLevel: bool
+    operation: CookieOperation
 
 
 ClientHintIssueReason: TypeAlias = Literal[
@@ -294,11 +395,9 @@ FederatedAuthRequestIssueReason: TypeAlias = Literal[
     "ConfigNoResponse",
     "ConfigInvalidResponse",
     "ConfigInvalidContentType",
-    "ClientMetadataHttpNotFound",
-    "ClientMetadataNoResponse",
-    "ClientMetadataInvalidResponse",
-    "ClientMetadataInvalidContentType",
+    "IdpNotPotentiallyTrustworthy",
     "DisabledInSettings",
+    "DisabledInFlags",
     "ErrorFetchingSignin",
     "InvalidSigninResponse",
     "AccountsHttpNotFound",
@@ -309,13 +408,22 @@ FederatedAuthRequestIssueReason: TypeAlias = Literal[
     "IdTokenHttpNotFound",
     "IdTokenNoResponse",
     "IdTokenInvalidResponse",
+    "IdTokenIdpErrorResponse",
+    "IdTokenCrossSiteIdpErrorResponse",
     "IdTokenInvalidRequest",
     "IdTokenInvalidContentType",
     "ErrorIdToken",
     "Canceled",
     "RpPageNotVisible",
     "SilentMediationFailure",
-    "ThirdPartyCookiesBlocked",
+    "NotSignedInWithIdp",
+    "MissingTransientUserActivation",
+    "ReplacedByActiveMode",
+    "RelyingPartyOriginIsOpaque",
+    "TypeNotMatching",
+    "UiDismissedNoEmbargo",
+    "CorsError",
+    "SuppressedBySegmentationPlatform",
 ]
 
 
@@ -336,6 +444,71 @@ FederatedAuthUserInfoRequestIssueReason: TypeAlias = Literal[
 ]
 
 
+class EmailVerificationRequestIssueDetails(TypedDict):
+    emailVerificationRequestIssueReason: EmailVerificationRequestIssueReason
+
+
+EmailVerificationRequestIssueReason: TypeAlias = Literal[
+    "InvalidEmail",
+    "DnsFetchFailed",
+    "DnsInvalidRecord",
+    "WellKnownHttpNotFound",
+    "WellKnownNoResponse",
+    "WellKnownInvalidResponse",
+    "WellKnownListEmpty",
+    "WellKnownInvalidContentType",
+    "WellKnownMissingIssuanceEndpoint",
+    "WellKnownIssuanceEndpointCrossOrigin",
+    "WellKnownUnsupportedSigningAlgorithm",
+    "TokenHttpNotFound",
+    "TokenNoResponse",
+    "TokenInvalidResponse",
+    "TokenInvalidContentType",
+    "TokenMalformedSdJwt",
+    "TokenInvalidSdJwt",
+    "KeyBindingSigningFailed",
+    "RpOriginIsOpaque",
+    "WellKnownMissingAccountsEndpoint",
+    "UserLoggedOut",
+    "WellKnownAccountsEndpointCrossOrigin",
+    "AccountsHttpNotFound",
+    "AccountsNoResponse",
+    "AccountsInvalidResponse",
+    "AccountsInvalidContentType",
+    "AccountsEmptyList",
+    "EmailVerificationWellKnownHttpNotFound",
+    "EmailVerificationWellKnownNoResponse",
+    "EmailVerificationWellKnownInvalidResponse",
+    "EmailVerificationWellKnownInvalidContentType",
+    "JwksHttpNotFound",
+    "JwksInvalidResponse",
+    "TokenVerificationSdJwtUnsupportedHeaderAlg",
+    "TokenVerificationSdJwtInvalidTyp",
+    "TokenVerificationSdJwtMissingIss",
+    "TokenVerificationSdJwtMissingIat",
+    "TokenVerificationSdJwtMissingCnf",
+    "TokenVerificationSdJwtMissingEmail",
+    "TokenVerificationSdJwtInvalidIssuedAt",
+    "TokenVerificationSdJwtInvalidIssuer",
+    "TokenVerificationSdJwtJwksMissingKeys",
+    "TokenVerificationSdJwtSignatureFailed",
+    "TokenVerificationSdJwtInvalidEmailVerified",
+    "TokenVerificationSdJwtInvalidEmail",
+    "TokenVerificationSdJwtInvalidHolderKey",
+    "TokenVerificationKbInvalidTyp",
+    "TokenVerificationKbMissingAud",
+    "TokenVerificationKbMissingNonce",
+    "TokenVerificationKbMissingIat",
+    "TokenVerificationKbMissingSdHash",
+    "TokenVerificationKbInvalidIssuedAt",
+    "TokenVerificationKbInvalidAudience",
+    "TokenVerificationKbInvalidNonce",
+    "TokenVerificationKbInvalidSdHash",
+    "TokenVerificationKbMissingCnf",
+    "TokenVerificationKbSignatureFailed",
+]
+
+
 class ClientHintIssueDetails(TypedDict):
     sourceCodeLocation: SourceCodeLocation
     clientHintIssueReason: ClientHintIssueReason
@@ -347,6 +520,32 @@ class FailedRequestInfo(TypedDict):
     requestId: NotRequired[Network.RequestId]
 
 
+PartitioningBlobURLInfo: TypeAlias = Literal[
+    "BlockedCrossPartitionFetching", "EnforceNoopenerForNavigation"
+]
+
+
+class PartitioningBlobURLIssueDetails(TypedDict):
+    url: str
+    partitioningBlobURLInfo: PartitioningBlobURLInfo
+
+
+ElementAccessibilityIssueReason: TypeAlias = Literal[
+    "DisallowedSelectChild",
+    "DisallowedOptGroupChild",
+    "NonPhrasingContentOptionChild",
+    "InteractiveContentOptionChild",
+    "InteractiveContentLegendChild",
+    "InteractiveContentSummaryDescendant",
+]
+
+
+class ElementAccessibilityIssueDetails(TypedDict):
+    nodeId: DOM.BackendNodeId
+    elementAccessibilityIssueReason: ElementAccessibilityIssueReason
+    hasDisallowedAttributes: bool
+
+
 StyleSheetLoadingIssueReason: TypeAlias = Literal["LateImportRule", "RequestFailed"]
 
 
@@ -356,6 +555,78 @@ class StylesheetLoadingIssueDetails(TypedDict):
     failedRequestInfo: NotRequired[FailedRequestInfo]
 
 
+PropertyRuleIssueReason: TypeAlias = Literal[
+    "InvalidSyntax", "InvalidInitialValue", "InvalidInherits", "InvalidName"
+]
+
+
+class PropertyRuleIssueDetails(TypedDict):
+    sourceCodeLocation: SourceCodeLocation
+    propertyRuleIssueReason: PropertyRuleIssueReason
+    propertyValue: NotRequired[str]
+
+
+UserReidentificationIssueType: TypeAlias = Literal[
+    "BlockedFrameNavigation", "BlockedSubresource", "NoisedCanvasReadback"
+]
+
+
+class UserReidentificationIssueDetails(TypedDict):
+    type: UserReidentificationIssueType
+    request: NotRequired[AffectedRequest]
+    sourceCodeLocation: NotRequired[SourceCodeLocation]
+
+
+PermissionElementIssueType: TypeAlias = Literal[
+    "InvalidType",
+    "FencedFrameDisallowed",
+    "CspFrameAncestorsMissing",
+    "PermissionsPolicyBlocked",
+    "PaddingRightUnsupported",
+    "PaddingBottomUnsupported",
+    "InsetBoxShadowUnsupported",
+    "RequestInProgress",
+    "UntrustedEvent",
+    "RegistrationFailed",
+    "TypeNotSupported",
+    "InvalidTypeActivation",
+    "SecurityChecksFailed",
+    "ActivationDisabled",
+    "GeolocationDeprecated",
+    "InvalidDisplayStyle",
+    "NonOpaqueColor",
+    "LowContrast",
+    "FontSizeTooSmall",
+    "FontSizeTooLarge",
+    "InvalidSizeValue",
+    "NonSecureContext",
+    "MissingTransientUserActivation",
+]
+
+
+class PermissionElementIssueDetails(TypedDict):
+    issueType: PermissionElementIssueType
+    type: NotRequired[str]
+    nodeId: NotRequired[DOM.BackendNodeId]
+    isWarning: NotRequired[bool]
+    permissionName: NotRequired[str]
+    occluderNodeInfo: NotRequired[str]
+    occluderParentNodeInfo: NotRequired[str]
+    disableReason: NotRequired[str]
+
+
+class SelectivePermissionsInterventionIssueDetails(TypedDict):
+    apiName: str
+    adAncestry: Network.AdAncestry
+    stackTrace: NotRequired[Runtime.StackTrace]
+
+
+class LazyLoadImageIssueDetails(TypedDict):
+    nodeId: DOM.BackendNodeId
+    url: str
+    frameId: Page.FrameId
+
+
 InspectorIssueCode: TypeAlias = Literal[
     "CookieIssue",
     "MixedContentIssue",
@@ -363,18 +634,30 @@ InspectorIssueCode: TypeAlias = Literal[
     "HeavyAdIssue",
     "ContentSecurityPolicyIssue",
     "SharedArrayBufferIssue",
-    "LowTextContrastIssue",
     "CorsIssue",
-    "AttributionReportingIssue",
     "QuirksModeIssue",
+    "PartitioningBlobURLIssue",
     "NavigatorUserAgentIssue",
     "GenericIssue",
     "DeprecationIssue",
     "ClientHintIssue",
     "FederatedAuthRequestIssue",
     "BounceTrackingIssue",
+    "CookieDeprecationMetadataIssue",
     "StylesheetLoadingIssue",
     "FederatedAuthUserInfoRequestIssue",
+    "PropertyRuleIssue",
+    "SharedDictionaryIssue",
+    "ElementAccessibilityIssue",
+    "SRIMessageSignatureIssue",
+    "UnencodedDigestIssue",
+    "ConnectionAllowlistIssue",
+    "UserReidentificationIssue",
+    "PermissionElementIssue",
+    "PerformanceIssue",
+    "SelectivePermissionsInterventionIssue",
+    "EmailVerificationRequestIssue",
+    "LazyLoadImageIssue",
 ]
 
 
@@ -385,20 +668,38 @@ class InspectorIssueDetails(TypedDict):
     heavyAdIssueDetails: NotRequired[HeavyAdIssueDetails]
     contentSecurityPolicyIssueDetails: NotRequired[ContentSecurityPolicyIssueDetails]
     sharedArrayBufferIssueDetails: NotRequired[SharedArrayBufferIssueDetails]
-    lowTextContrastIssueDetails: NotRequired[LowTextContrastIssueDetails]
     corsIssueDetails: NotRequired[CorsIssueDetails]
-    attributionReportingIssueDetails: NotRequired[AttributionReportingIssueDetails]
     quirksModeIssueDetails: NotRequired[QuirksModeIssueDetails]
+    partitioningBlobURLIssueDetails: NotRequired[PartitioningBlobURLIssueDetails]
     navigatorUserAgentIssueDetails: NotRequired[NavigatorUserAgentIssueDetails]
     genericIssueDetails: NotRequired[GenericIssueDetails]
     deprecationIssueDetails: NotRequired[DeprecationIssueDetails]
     clientHintIssueDetails: NotRequired[ClientHintIssueDetails]
     federatedAuthRequestIssueDetails: NotRequired[FederatedAuthRequestIssueDetails]
     bounceTrackingIssueDetails: NotRequired[BounceTrackingIssueDetails]
+    cookieDeprecationMetadataIssueDetails: NotRequired[
+        CookieDeprecationMetadataIssueDetails
+    ]
     stylesheetLoadingIssueDetails: NotRequired[StylesheetLoadingIssueDetails]
+    propertyRuleIssueDetails: NotRequired[PropertyRuleIssueDetails]
     federatedAuthUserInfoRequestIssueDetails: NotRequired[
         FederatedAuthUserInfoRequestIssueDetails
     ]
+    sharedDictionaryIssueDetails: NotRequired[SharedDictionaryIssueDetails]
+    elementAccessibilityIssueDetails: NotRequired[ElementAccessibilityIssueDetails]
+    sriMessageSignatureIssueDetails: NotRequired[SRIMessageSignatureIssueDetails]
+    unencodedDigestIssueDetails: NotRequired[UnencodedDigestIssueDetails]
+    connectionAllowlistIssueDetails: NotRequired[ConnectionAllowlistIssueDetails]
+    userReidentificationIssueDetails: NotRequired[UserReidentificationIssueDetails]
+    permissionElementIssueDetails: NotRequired[PermissionElementIssueDetails]
+    performanceIssueDetails: NotRequired[PerformanceIssueDetails]
+    selectivePermissionsInterventionIssueDetails: NotRequired[
+        SelectivePermissionsInterventionIssueDetails
+    ]
+    emailVerificationRequestIssueDetails: NotRequired[
+        EmailVerificationRequestIssueDetails
+    ]
+    lazyLoadImageIssueDetails: NotRequired[LazyLoadImageIssueDetails]
 
 
 IssueId: TypeAlias = str
@@ -421,10 +722,6 @@ class GetEncodedResponseResult(TypedDict):
     body: NotRequired[str]
     originalSize: int
     encodedSize: int
-
-
-class CheckContrastParameters(TypedDict):
-    reportAAA: NotRequired[bool]
 
 
 class CheckFormsIssuesResult(TypedDict):
@@ -483,31 +780,6 @@ class Audits(BaseDomain):
         """Enables issues domain, sends the issues collected so far to the client by means of the `issueAdded` event."""
 
         return await self._command("enable", None, session_id, {})
-
-    @overload
-    async def checkContrast(
-        self,
-        params: CheckContrastParameters,
-        session_id: str | None = None,
-    ) -> JsonObject: ...
-
-    @overload
-    async def checkContrast(
-        self,
-        params: str | None = None,
-        session_id: str | None = None,
-        **kwargs: Unpack[CheckContrastParameters],
-    ) -> JsonObject: ...
-
-    async def checkContrast(
-        self,
-        params: Mapping[str, object] | str | None = None,
-        session_id: str | None = None,
-        **kwargs: object,
-    ) -> JsonObject:
-        """Runs the contrast check for the target page. Found issues are reported using Audits.issueAdded event."""
-
-        return await self._command("checkContrast", params, session_id, kwargs)
 
     async def checkFormsIssues(
         self,
@@ -574,24 +846,29 @@ __all__ = [
     "AffectedCookie",
     "AffectedFrame",
     "AffectedRequest",
-    "AttributionReportingIssueDetails",
-    "AttributionReportingIssueType",
     "Audits",
     "BlockedByResponseIssueDetails",
     "BlockedByResponseReason",
     "BounceTrackingIssueDetails",
-    "CheckContrastParameters",
     "CheckFormsIssuesResult",
     "ClientHintIssueDetails",
     "ClientHintIssueReason",
+    "ConnectionAllowlistError",
+    "ConnectionAllowlistIssueDetails",
     "ContentSecurityPolicyIssueDetails",
     "ContentSecurityPolicyViolationType",
+    "CookieDeprecationMetadataIssueDetails",
     "CookieExclusionReason",
     "CookieIssueDetails",
+    "CookieIssueInsight",
     "CookieOperation",
     "CookieWarningReason",
     "CorsIssueDetails",
     "DeprecationIssueDetails",
+    "ElementAccessibilityIssueDetails",
+    "ElementAccessibilityIssueReason",
+    "EmailVerificationRequestIssueDetails",
+    "EmailVerificationRequestIssueReason",
     "FailedRequestInfo",
     "FederatedAuthRequestIssueDetails",
     "FederatedAuthRequestIssueReason",
@@ -604,20 +881,38 @@ __all__ = [
     "HeavyAdIssueDetails",
     "HeavyAdReason",
     "HeavyAdResolutionStatus",
+    "InsightType",
     "InspectorIssue",
     "InspectorIssueCode",
     "InspectorIssueDetails",
     "IssueAddedEvent",
     "IssueId",
-    "LowTextContrastIssueDetails",
+    "LazyLoadImageIssueDetails",
     "MixedContentIssueDetails",
     "MixedContentResolutionStatus",
     "MixedContentResourceType",
     "NavigatorUserAgentIssueDetails",
+    "PartitioningBlobURLInfo",
+    "PartitioningBlobURLIssueDetails",
+    "PerformanceIssueDetails",
+    "PerformanceIssueType",
+    "PermissionElementIssueDetails",
+    "PermissionElementIssueType",
+    "PropertyRuleIssueDetails",
+    "PropertyRuleIssueReason",
     "QuirksModeIssueDetails",
+    "SRIMessageSignatureError",
+    "SRIMessageSignatureIssueDetails",
+    "SelectivePermissionsInterventionIssueDetails",
     "SharedArrayBufferIssueDetails",
     "SharedArrayBufferIssueType",
+    "SharedDictionaryError",
+    "SharedDictionaryIssueDetails",
     "SourceCodeLocation",
     "StyleSheetLoadingIssueReason",
     "StylesheetLoadingIssueDetails",
+    "UnencodedDigestError",
+    "UnencodedDigestIssueDetails",
+    "UserReidentificationIssueDetails",
+    "UserReidentificationIssueType",
 ]

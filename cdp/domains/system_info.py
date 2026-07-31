@@ -45,13 +45,6 @@ SubsamplingFormat: TypeAlias = Literal["yuv420", "yuv422", "yuv444"]
 ImageType: TypeAlias = Literal["jpeg", "webp", "unknown"]
 
 
-class ImageDecodeAcceleratorCapability(TypedDict):
-    imageType: ImageType
-    maxDimensions: Size
-    minDimensions: Size
-    subsamplings: list[SubsamplingFormat]
-
-
 class GPUInfo(TypedDict):
     devices: list[GPUDevice]
     auxAttributes: NotRequired[JsonObject]
@@ -59,7 +52,6 @@ class GPUInfo(TypedDict):
     driverBugWorkarounds: list[str]
     videoDecoding: list[VideoDecodeAcceleratorCapability]
     videoEncoding: list[VideoEncodeAcceleratorCapability]
-    imageDecoding: list[ImageDecodeAcceleratorCapability]
 
 
 class ProcessInfo(TypedDict):
@@ -147,7 +139,6 @@ __all__ = [
     "GetFeatureStateResult",
     "GetInfoResult",
     "GetProcessInfoResult",
-    "ImageDecodeAcceleratorCapability",
     "ImageType",
     "ProcessInfo",
     "Size",

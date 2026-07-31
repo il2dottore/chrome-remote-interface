@@ -14,12 +14,12 @@ if TYPE_CHECKING:
     from . import browser as Browser
     from . import network as Network
     from . import page as Page
+    from . import target as Target
 
 
 SerializedStorageKey: TypeAlias = str
 
 StorageType: TypeAlias = Literal[
-    "appcache",
     "cookies",
     "file_systems",
     "indexeddb",
@@ -28,7 +28,6 @@ StorageType: TypeAlias = Literal[
     "websql",
     "service_workers",
     "cache_storage",
-    "interest_groups",
     "shared_storage",
     "storage_buckets",
     "all",
@@ -46,48 +45,26 @@ class TrustTokens(TypedDict):
     count: float
 
 
-InterestGroupAccessType: TypeAlias = Literal[
-    "join", "leave", "update", "loaded", "bid", "win"
+SharedStorageAccessScope: TypeAlias = Literal[
+    "window", "sharedStorageWorklet", "header"
 ]
 
-
-class InterestGroupAd(TypedDict):
-    renderUrl: str
-    metadata: NotRequired[str]
-
-
-class InterestGroupDetails(TypedDict):
-    ownerOrigin: str
-    name: str
-    expirationTime: Network.TimeSinceEpoch
-    joiningOrigin: str
-    biddingUrl: NotRequired[str]
-    biddingWasmHelperUrl: NotRequired[str]
-    updateUrl: NotRequired[str]
-    trustedBiddingSignalsUrl: NotRequired[str]
-    trustedBiddingSignalsKeys: list[str]
-    userBiddingSignals: NotRequired[str]
-    ads: list[InterestGroupAd]
-    adComponents: list[InterestGroupAd]
-
-
-SharedStorageAccessType: TypeAlias = Literal[
-    "documentAddModule",
-    "documentSelectURL",
-    "documentRun",
-    "documentSet",
-    "documentAppend",
-    "documentDelete",
-    "documentClear",
-    "workletSet",
-    "workletAppend",
-    "workletDelete",
-    "workletClear",
-    "workletGet",
-    "workletKeys",
-    "workletEntries",
-    "workletLength",
-    "workletRemainingBudget",
+SharedStorageAccessMethod: TypeAlias = Literal[
+    "addModule",
+    "createWorklet",
+    "selectURL",
+    "run",
+    "batchUpdate",
+    "set",
+    "append",
+    "delete",
+    "clear",
+    "get",
+    "keys",
+    "values",
+    "entries",
+    "length",
+    "remainingBudget",
 ]
 
 
@@ -100,6 +77,14 @@ class SharedStorageMetadata(TypedDict):
     creationTime: Network.TimeSinceEpoch
     length: int
     remainingBudget: float
+    bytesUsed: int
+
+
+class SharedStoragePrivateAggregationConfig(TypedDict):
+    aggregationCoordinatorOrigin: NotRequired[str]
+    contextId: NotRequired[str]
+    filteringIdMaxBytes: int
+    maxContributions: NotRequired[int]
 
 
 class SharedStorageReportingMetadata(TypedDict):
@@ -114,12 +99,22 @@ class SharedStorageUrlWithMetadata(TypedDict):
 
 class SharedStorageAccessParams(TypedDict):
     scriptSourceUrl: NotRequired[str]
+    dataOrigin: NotRequired[str]
     operationName: NotRequired[str]
+    operationId: NotRequired[str]
+    keepAlive: NotRequired[bool]
+    privateAggregationConfig: NotRequired[SharedStoragePrivateAggregationConfig]
     serializedData: NotRequired[str]
     urlsWithMetadata: NotRequired[list[SharedStorageUrlWithMetadata]]
+    urnUuid: NotRequired[str]
     key: NotRequired[str]
     value: NotRequired[str]
     ignoreIfPresent: NotRequired[bool]
+    workletOrdinal: NotRequired[int]
+    workletTargetId: NotRequired[Target.TargetID]
+    withLock: NotRequired[str]
+    batchUpdateId: NotRequired[str]
+    batchSize: NotRequired[int]
 
 
 StorageBucketsDurability: TypeAlias = Literal["relaxed", "strict"]
@@ -139,54 +134,10 @@ class StorageBucketInfo(TypedDict):
     durability: StorageBucketsDurability
 
 
-AttributionReportingSourceType: TypeAlias = Literal["navigation", "event"]
-
-UnsignedInt64AsBase10: TypeAlias = str
-
-UnsignedInt128AsBase16: TypeAlias = str
-
-SignedInt64AsBase10: TypeAlias = str
-
-
-class AttributionReportingFilterDataEntry(TypedDict):
-    key: str
-    values: list[str]
-
-
-class AttributionReportingAggregationKeysEntry(TypedDict):
-    key: str
-    value: UnsignedInt128AsBase16
-
-
-class AttributionReportingSourceRegistration(TypedDict):
-    time: Network.TimeSinceEpoch
-    expiry: NotRequired[int]
-    eventReportWindow: NotRequired[int]
-    aggregatableReportWindow: NotRequired[int]
-    type: AttributionReportingSourceType
-    sourceOrigin: str
-    reportingOrigin: str
-    destinationSites: list[str]
-    eventId: UnsignedInt64AsBase10
-    priority: SignedInt64AsBase10
-    filterData: list[AttributionReportingFilterDataEntry]
-    aggregationKeys: list[AttributionReportingAggregationKeysEntry]
-    debugKey: NotRequired[UnsignedInt64AsBase10]
-
-
-AttributionReportingSourceRegistrationResult: TypeAlias = Literal[
-    "success",
-    "internalError",
-    "insufficientSourceCapacity",
-    "insufficientUniqueDestinationCapacity",
-    "excessiveReportingOrigins",
-    "prohibitedByBrowserPolicy",
-    "successNoised",
-    "destinationReportingLimitReached",
-    "destinationGlobalLimitReached",
-    "destinationBothLimitsReached",
-    "reportingOriginsPerSiteLimitReached",
-]
+class RelatedWebsiteSet(TypedDict):
+    primarySites: list[str]
+    associatedSites: list[str]
+    serviceSites: list[str]
 
 
 class GetStorageKeyForFrameParameters(TypedDict):
@@ -194,6 +145,14 @@ class GetStorageKeyForFrameParameters(TypedDict):
 
 
 class GetStorageKeyForFrameResult(TypedDict):
+    storageKey: SerializedStorageKey
+
+
+class GetStorageKeyParameters(TypedDict):
+    frameId: NotRequired[Page.FrameId]
+
+
+class GetStorageKeyResult(TypedDict):
     storageKey: SerializedStorageKey
 
 
@@ -284,19 +243,6 @@ class ClearTrustTokensResult(TypedDict):
     didDeleteTokens: bool
 
 
-class GetInterestGroupDetailsParameters(TypedDict):
-    ownerOrigin: str
-    name: str
-
-
-class GetInterestGroupDetailsResult(TypedDict):
-    details: InterestGroupDetails
-
-
-class SetInterestGroupTrackingParameters(TypedDict):
-    enable: bool
-
-
 class GetSharedStorageMetadataParameters(TypedDict):
     ownerOrigin: str
 
@@ -350,12 +296,8 @@ class RunBounceTrackingMitigationsResult(TypedDict):
     deletedSites: list[str]
 
 
-class SetAttributionReportingLocalTestingModeParameters(TypedDict):
-    enabled: bool
-
-
-class SetAttributionReportingTrackingParameters(TypedDict):
-    enable: bool
+class GetRelatedWebsiteSetsResult(TypedDict):
+    sets: list[RelatedWebsiteSet]
 
 
 class CacheStorageContentUpdatedEvent(TypedDict):
@@ -385,19 +327,24 @@ class IndexedDBListUpdatedEvent(TypedDict):
     bucketId: str
 
 
-class InterestGroupAccessedEvent(TypedDict):
-    accessTime: Network.TimeSinceEpoch
-    type: InterestGroupAccessType
-    ownerOrigin: str
-    name: str
-
-
 class SharedStorageAccessedEvent(TypedDict):
     accessTime: Network.TimeSinceEpoch
-    type: SharedStorageAccessType
+    scope: SharedStorageAccessScope
+    method: SharedStorageAccessMethod
     mainFrameId: Page.FrameId
     ownerOrigin: str
+    ownerSite: str
     params: SharedStorageAccessParams
+
+
+class SharedStorageWorkletOperationExecutionFinishedEvent(TypedDict):
+    finishedTime: Network.TimeSinceEpoch
+    executionTime: int
+    method: SharedStorageAccessMethod
+    operationId: str
+    workletTargetId: Target.TargetID
+    mainFrameId: Page.FrameId
+    ownerOrigin: str
 
 
 class StorageBucketCreatedOrUpdatedEvent(TypedDict):
@@ -406,11 +353,6 @@ class StorageBucketCreatedOrUpdatedEvent(TypedDict):
 
 class StorageBucketDeletedEvent(TypedDict):
     bucketId: str
-
-
-class AttributionReportingSourceRegisteredEvent(TypedDict):
-    registration: AttributionReportingSourceRegistration
-    result: AttributionReportingSourceRegistrationResult
 
 
 class Storage(BaseDomain):
@@ -439,11 +381,39 @@ class Storage(BaseDomain):
         session_id: str | None = None,
         **kwargs: object,
     ) -> GetStorageKeyForFrameResult:
-        """Returns a storage key given a frame id."""
+        """Returns a storage key given a frame id. Deprecated. Please use Storage.getStorageKey instead."""
 
         return cast(
             GetStorageKeyForFrameResult,
             await self._command("getStorageKeyForFrame", params, session_id, kwargs),
+        )
+
+    @overload
+    async def getStorageKey(
+        self,
+        params: GetStorageKeyParameters,
+        session_id: str | None = None,
+    ) -> GetStorageKeyResult: ...
+
+    @overload
+    async def getStorageKey(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[GetStorageKeyParameters],
+    ) -> GetStorageKeyResult: ...
+
+    async def getStorageKey(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> GetStorageKeyResult:
+        """Returns storage key for the given frame. If no frame ID is provided, the storage key of the target executing this command is returned."""
+
+        return cast(
+            GetStorageKeyResult,
+            await self._command("getStorageKey", params, session_id, kwargs),
         )
 
     @overload
@@ -883,61 +853,6 @@ class Storage(BaseDomain):
         )
 
     @overload
-    async def getInterestGroupDetails(
-        self,
-        params: GetInterestGroupDetailsParameters,
-        session_id: str | None = None,
-    ) -> GetInterestGroupDetailsResult: ...
-
-    @overload
-    async def getInterestGroupDetails(
-        self,
-        params: str | None = None,
-        session_id: str | None = None,
-        **kwargs: Unpack[GetInterestGroupDetailsParameters],
-    ) -> GetInterestGroupDetailsResult: ...
-
-    async def getInterestGroupDetails(
-        self,
-        params: Mapping[str, object] | str | None = None,
-        session_id: str | None = None,
-        **kwargs: object,
-    ) -> GetInterestGroupDetailsResult:
-        """Gets details for a named interest group."""
-
-        return cast(
-            GetInterestGroupDetailsResult,
-            await self._command("getInterestGroupDetails", params, session_id, kwargs),
-        )
-
-    @overload
-    async def setInterestGroupTracking(
-        self,
-        params: SetInterestGroupTrackingParameters,
-        session_id: str | None = None,
-    ) -> JsonObject: ...
-
-    @overload
-    async def setInterestGroupTracking(
-        self,
-        params: str | None = None,
-        session_id: str | None = None,
-        **kwargs: Unpack[SetInterestGroupTrackingParameters],
-    ) -> JsonObject: ...
-
-    async def setInterestGroupTracking(
-        self,
-        params: Mapping[str, object] | str | None = None,
-        session_id: str | None = None,
-        **kwargs: object,
-    ) -> JsonObject:
-        """Enables/Disables issuing of interestGroupAccessed events."""
-
-        return await self._command(
-            "setInterestGroupTracking", params, session_id, kwargs
-        )
-
-    @overload
     async def getSharedStorageMetadata(
         self,
         params: GetSharedStorageMetadataParameters,
@@ -1189,58 +1104,15 @@ class Storage(BaseDomain):
             await self._command("runBounceTrackingMitigations", None, session_id, {}),
         )
 
-    @overload
-    async def setAttributionReportingLocalTestingMode(
+    async def getRelatedWebsiteSets(
         self,
-        params: SetAttributionReportingLocalTestingModeParameters,
         session_id: str | None = None,
-    ) -> JsonObject: ...
+    ) -> GetRelatedWebsiteSetsResult:
+        """Returns the effective Related Website Sets in use by this profile for the browser session. The effective Related Website Sets will not change during a browser session."""
 
-    @overload
-    async def setAttributionReportingLocalTestingMode(
-        self,
-        params: str | None = None,
-        session_id: str | None = None,
-        **kwargs: Unpack[SetAttributionReportingLocalTestingModeParameters],
-    ) -> JsonObject: ...
-
-    async def setAttributionReportingLocalTestingMode(
-        self,
-        params: Mapping[str, object] | str | None = None,
-        session_id: str | None = None,
-        **kwargs: object,
-    ) -> JsonObject:
-        """https://wicg.github.io/attribution-reporting-api/"""
-
-        return await self._command(
-            "setAttributionReportingLocalTestingMode", params, session_id, kwargs
-        )
-
-    @overload
-    async def setAttributionReportingTracking(
-        self,
-        params: SetAttributionReportingTrackingParameters,
-        session_id: str | None = None,
-    ) -> JsonObject: ...
-
-    @overload
-    async def setAttributionReportingTracking(
-        self,
-        params: str | None = None,
-        session_id: str | None = None,
-        **kwargs: Unpack[SetAttributionReportingTrackingParameters],
-    ) -> JsonObject: ...
-
-    async def setAttributionReportingTracking(
-        self,
-        params: Mapping[str, object] | str | None = None,
-        session_id: str | None = None,
-        **kwargs: object,
-    ) -> JsonObject:
-        """Enables/disables issuing of Attribution Reporting events."""
-
-        return await self._command(
-            "setAttributionReportingTracking", params, session_id, kwargs
+        return cast(
+            GetRelatedWebsiteSetsResult,
+            await self._command("getRelatedWebsiteSets", None, session_id, {}),
         )
 
     @overload
@@ -1448,57 +1320,6 @@ class Storage(BaseDomain):
         )
 
     @overload
-    def interestGroupAccessed(
-        self,
-        callback_or_session: EventCallback[InterestGroupAccessedEvent],
-        handler: None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Unsubscribe: ...
-
-    @overload
-    def interestGroupAccessed(
-        self,
-        callback_or_session: str,
-        handler: EventCallback[InterestGroupAccessedEvent],
-        *,
-        session_id: str | None = None,
-    ) -> Unsubscribe: ...
-
-    @overload
-    def interestGroupAccessed(
-        self,
-        callback_or_session: str | None = None,
-        handler: None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Awaitable[InterestGroupAccessedEvent]: ...
-
-    def interestGroupAccessed(
-        self,
-        callback_or_session: EventCallback[InterestGroupAccessedEvent]
-        | str
-        | None = None,
-        handler: EventCallback[InterestGroupAccessedEvent] | None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Awaitable[InterestGroupAccessedEvent] | Unsubscribe:
-        """One of the interest groups was accessed by the associated page."""
-
-        return cast(
-            Awaitable[InterestGroupAccessedEvent] | Unsubscribe,
-            self._event(
-                "interestGroupAccessed",
-                cast(
-                    EventCallback[Mapping[str, object]] | str | None,
-                    callback_or_session,
-                ),
-                cast(EventCallback[Mapping[str, object]] | None, handler),
-                session_id,
-            ),
-        )
-
-    @overload
     def sharedStorageAccessed(
         self,
         callback_or_session: EventCallback[SharedStorageAccessedEvent],
@@ -1540,6 +1361,63 @@ class Storage(BaseDomain):
             Awaitable[SharedStorageAccessedEvent] | Unsubscribe,
             self._event(
                 "sharedStorageAccessed",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
+    @overload
+    def sharedStorageWorkletOperationExecutionFinished(
+        self,
+        callback_or_session: EventCallback[
+            SharedStorageWorkletOperationExecutionFinishedEvent
+        ],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def sharedStorageWorkletOperationExecutionFinished(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[SharedStorageWorkletOperationExecutionFinishedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def sharedStorageWorkletOperationExecutionFinished(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[SharedStorageWorkletOperationExecutionFinishedEvent]: ...
+
+    def sharedStorageWorkletOperationExecutionFinished(
+        self,
+        callback_or_session: EventCallback[
+            SharedStorageWorkletOperationExecutionFinishedEvent
+        ]
+        | str
+        | None = None,
+        handler: EventCallback[SharedStorageWorkletOperationExecutionFinishedEvent]
+        | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[SharedStorageWorkletOperationExecutionFinishedEvent] | Unsubscribe:
+        """A shared storage run or selectURL operation finished its execution. The following parameters are included in all events."""
+
+        return cast(
+            Awaitable[SharedStorageWorkletOperationExecutionFinishedEvent]
+            | Unsubscribe,
+            self._event(
+                "sharedStorageWorkletOperationExecutionFinished",
                 cast(
                     EventCallback[Mapping[str, object]] | str | None,
                     callback_or_session,
@@ -1651,65 +1529,8 @@ class Storage(BaseDomain):
             ),
         )
 
-    @overload
-    def attributionReportingSourceRegistered(
-        self,
-        callback_or_session: EventCallback[AttributionReportingSourceRegisteredEvent],
-        handler: None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Unsubscribe: ...
-
-    @overload
-    def attributionReportingSourceRegistered(
-        self,
-        callback_or_session: str,
-        handler: EventCallback[AttributionReportingSourceRegisteredEvent],
-        *,
-        session_id: str | None = None,
-    ) -> Unsubscribe: ...
-
-    @overload
-    def attributionReportingSourceRegistered(
-        self,
-        callback_or_session: str | None = None,
-        handler: None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Awaitable[AttributionReportingSourceRegisteredEvent]: ...
-
-    def attributionReportingSourceRegistered(
-        self,
-        callback_or_session: EventCallback[AttributionReportingSourceRegisteredEvent]
-        | str
-        | None = None,
-        handler: EventCallback[AttributionReportingSourceRegisteredEvent] | None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Awaitable[AttributionReportingSourceRegisteredEvent] | Unsubscribe:
-        """TODO(crbug.com/1458532): Add other Attribution Reporting events, e.g. trigger registration."""
-
-        return cast(
-            Awaitable[AttributionReportingSourceRegisteredEvent] | Unsubscribe,
-            self._event(
-                "attributionReportingSourceRegistered",
-                cast(
-                    EventCallback[Mapping[str, object]] | str | None,
-                    callback_or_session,
-                ),
-                cast(EventCallback[Mapping[str, object]] | None, handler),
-                session_id,
-            ),
-        )
-
 
 __all__ = [
-    "AttributionReportingAggregationKeysEntry",
-    "AttributionReportingFilterDataEntry",
-    "AttributionReportingSourceRegisteredEvent",
-    "AttributionReportingSourceRegistration",
-    "AttributionReportingSourceRegistrationResult",
-    "AttributionReportingSourceType",
     "CacheStorageContentUpdatedEvent",
     "CacheStorageListUpdatedEvent",
     "ClearCookiesParameters",
@@ -1722,42 +1543,39 @@ __all__ = [
     "DeleteStorageBucketParameters",
     "GetCookiesParameters",
     "GetCookiesResult",
-    "GetInterestGroupDetailsParameters",
-    "GetInterestGroupDetailsResult",
+    "GetRelatedWebsiteSetsResult",
     "GetSharedStorageEntriesParameters",
     "GetSharedStorageEntriesResult",
     "GetSharedStorageMetadataParameters",
     "GetSharedStorageMetadataResult",
     "GetStorageKeyForFrameParameters",
     "GetStorageKeyForFrameResult",
+    "GetStorageKeyParameters",
+    "GetStorageKeyResult",
     "GetTrustTokensResult",
     "GetUsageAndQuotaParameters",
     "GetUsageAndQuotaResult",
     "IndexedDBContentUpdatedEvent",
     "IndexedDBListUpdatedEvent",
-    "InterestGroupAccessType",
-    "InterestGroupAccessedEvent",
-    "InterestGroupAd",
-    "InterestGroupDetails",
     "OverrideQuotaForOriginParameters",
+    "RelatedWebsiteSet",
     "ResetSharedStorageBudgetParameters",
     "RunBounceTrackingMitigationsResult",
     "SerializedStorageKey",
-    "SetAttributionReportingLocalTestingModeParameters",
-    "SetAttributionReportingTrackingParameters",
     "SetCookiesParameters",
-    "SetInterestGroupTrackingParameters",
     "SetSharedStorageEntryParameters",
     "SetSharedStorageTrackingParameters",
     "SetStorageBucketTrackingParameters",
+    "SharedStorageAccessMethod",
     "SharedStorageAccessParams",
-    "SharedStorageAccessType",
+    "SharedStorageAccessScope",
     "SharedStorageAccessedEvent",
     "SharedStorageEntry",
     "SharedStorageMetadata",
+    "SharedStoragePrivateAggregationConfig",
     "SharedStorageReportingMetadata",
     "SharedStorageUrlWithMetadata",
-    "SignedInt64AsBase10",
+    "SharedStorageWorkletOperationExecutionFinishedEvent",
     "Storage",
     "StorageBucket",
     "StorageBucketCreatedOrUpdatedEvent",
@@ -1770,8 +1588,6 @@ __all__ = [
     "TrackIndexedDBForOriginParameters",
     "TrackIndexedDBForStorageKeyParameters",
     "TrustTokens",
-    "UnsignedInt64AsBase10",
-    "UnsignedInt128AsBase16",
     "UntrackCacheStorageForOriginParameters",
     "UntrackCacheStorageForStorageKeyParameters",
     "UntrackIndexedDBForOriginParameters",

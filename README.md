@@ -155,19 +155,48 @@ also exported.
 
 ## Generated CDP domains
 
-The bundled schema is
+### Where `protocol.json` comes from
+
+The source descriptor is
 [`chrome-remote-interface/lib/protocol.json`](chrome-remote-interface/lib/protocol.json).
-Each domain is generated into its own module under [`cdp/domains/`](cdp/domains/):
+It is the merged Chrome DevTools Protocol schema: Chrome's browser domains
+plus the JavaScript/runtime domains from the upstream
+[`devtools-protocol`](https://github.com/ChromeDevTools/devtools-protocol)
+repository. The copy at `cdp/protocol.json` is generated automatically for
+`Protocol({"local": True})`; do not edit that copy by hand.
+
+### Updating the schema
+
+To use the exact protocol supported by a running Chrome, first start Chrome
+with remote debugging and download its descriptor:
+
+```powershell
+Invoke-WebRequest `
+    -Uri http://localhost:9222/json/protocol `
+    -OutFile chrome-remote-interface/lib/protocol.json
+```
+
+Or, from Git Bash, run the repository's update script to fetch and merge the
+latest upstream schema used by the original Node.js project:
+
+```bash
+bash scripts/update-protocol.sh
+```
+
+The script writes the source descriptor and regenerates the Python bindings
+automatically. If you only replace the source file manually, regenerate from
+the repository root with:
+
+```console
+python tools/generate_domains.py
+```
+
+The generator validates the descriptor, copies it to `cdp/protocol.json`, and
+writes one module per domain under [`cdp/domains/`](cdp/domains/):
 
 ```python
 from cdp.domains.page import NavigateParameters, NavigateResult
 from cdp.domains.runtime import RemoteObject
-```
-
-Regenerate the modules after updating the schema:
-
-```console
-python tools/generate_domains.py
 ```
 
 `tools/generate_stubs.py` remains available as a compatibility entry point.

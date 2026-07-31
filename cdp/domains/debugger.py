@@ -88,8 +88,13 @@ ScriptLanguage: TypeAlias = Literal["JavaScript", "WebAssembly"]
 
 
 class DebugSymbols(TypedDict):
-    type: Literal["None", "SourceMap", "EmbeddedDWARF", "ExternalDWARF"]
+    type: Literal["SourceMap", "EmbeddedDWARF", "ExternalDWARF"]
     externalURL: NotRequired[str]
+
+
+class ResolvedBreakpoint(TypedDict):
+    breakpointId: BreakpointId
+    location: Location
 
 
 class ContinueToLocationParameters(TypedDict):
@@ -214,8 +219,13 @@ class SetAsyncCallStackDepthParameters(TypedDict):
     maxDepth: int
 
 
+class SetBlackboxExecutionContextsParameters(TypedDict):
+    uniqueIds: list[str]
+
+
 class SetBlackboxPatternsParameters(TypedDict):
     patterns: list[str]
+    skipAnonymous: NotRequired[bool]
 
 
 class SetBlackboxedRangesParameters(TypedDict):
@@ -358,6 +368,7 @@ class ScriptFailedToParseEvent(TypedDict):
     endColumn: int
     executionContextId: Runtime.ExecutionContextId
     hash: str
+    buildId: str
     executionContextAuxData: NotRequired[JsonObject]
     sourceMapURL: NotRequired[str]
     hasSourceURL: NotRequired[bool]
@@ -378,6 +389,7 @@ class ScriptParsedEvent(TypedDict):
     endColumn: int
     executionContextId: Runtime.ExecutionContextId
     hash: str
+    buildId: str
     executionContextAuxData: NotRequired[JsonObject]
     isLiveEdit: NotRequired[bool]
     sourceMapURL: NotRequired[str]
@@ -387,8 +399,9 @@ class ScriptParsedEvent(TypedDict):
     stackTrace: NotRequired[Runtime.StackTrace]
     codeOffset: NotRequired[int]
     scriptLanguage: NotRequired[ScriptLanguage]
-    debugSymbols: NotRequired[DebugSymbols]
+    debugSymbols: NotRequired[list[DebugSymbols]]
     embedderName: NotRequired[str]
+    resolvedBreakpoints: NotRequired[list[ResolvedBreakpoint]]
 
 
 class Debugger(BaseDomain):
@@ -817,6 +830,33 @@ class Debugger(BaseDomain):
         return await self._command("setAsyncCallStackDepth", params, session_id, kwargs)
 
     @overload
+    async def setBlackboxExecutionContexts(
+        self,
+        params: SetBlackboxExecutionContextsParameters,
+        session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def setBlackboxExecutionContexts(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[SetBlackboxExecutionContextsParameters],
+    ) -> JsonObject: ...
+
+    async def setBlackboxExecutionContexts(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> JsonObject:
+        """Replace previous blackbox execution contexts with passed ones. Forces backend to skip stepping/pausing in scripts in these execution contexts. VM will try to leave blackboxed script by performing 'step in' several times, finally resorting to 'step out' if unsuccessful."""
+
+        return await self._command(
+            "setBlackboxExecutionContexts", params, session_id, kwargs
+        )
+
+    @overload
     async def setBlackboxPatterns(
         self,
         params: SetBlackboxPatternsParameters,
@@ -1227,7 +1267,7 @@ class Debugger(BaseDomain):
         *,
         session_id: str | None = None,
     ) -> Awaitable[BreakpointResolvedEvent] | Unsubscribe:
-        """Fired when breakpoint is resolved to an actual script and location."""
+        """Fired when breakpoint is resolved to an actual script and location. Deprecated in favor of `resolvedBreakpoints` in the `scriptParsed` event."""
 
         return cast(
             Awaitable[BreakpointResolvedEvent] | Unsubscribe,
@@ -1465,6 +1505,7 @@ __all__ = [
     "PauseOnAsyncCallParameters",
     "PausedEvent",
     "RemoveBreakpointParameters",
+    "ResolvedBreakpoint",
     "RestartFrameParameters",
     "RestartFrameResult",
     "ResumeParameters",
@@ -1477,6 +1518,7 @@ __all__ = [
     "SearchInContentResult",
     "SearchMatch",
     "SetAsyncCallStackDepthParameters",
+    "SetBlackboxExecutionContextsParameters",
     "SetBlackboxPatternsParameters",
     "SetBlackboxedRangesParameters",
     "SetBreakpointByUrlParameters",

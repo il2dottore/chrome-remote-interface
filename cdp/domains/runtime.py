@@ -45,6 +45,7 @@ class DeepSerializedValue(TypedDict):
         "arraybuffer",
         "node",
         "window",
+        "generator",
     ]
     value: NotRequired[JsonValue]
     objectId: NotRequired[str]
@@ -88,13 +89,13 @@ class RemoteObject(TypedDict):
             "dataview",
             "webassemblymemory",
             "wasmvalue",
+            "trustedtype",
         ]
     ]
     className: NotRequired[str]
     value: NotRequired[JsonValue]
     unserializableValue: NotRequired[UnserializableValue]
     description: NotRequired[str]
-    webDriverValue: NotRequired[DeepSerializedValue]
     deepSerializedValue: NotRequired[DeepSerializedValue]
     objectId: NotRequired[RemoteObjectId]
     preview: NotRequired[ObjectPreview]
@@ -138,6 +139,7 @@ class ObjectPreview(TypedDict):
             "dataview",
             "webassemblymemory",
             "wasmvalue",
+            "trustedtype",
         ]
     ]
     description: NotRequired[str]
@@ -182,6 +184,7 @@ class PropertyPreview(TypedDict):
             "dataview",
             "webassemblymemory",
             "wasmvalue",
+            "trustedtype",
         ]
     ]
 
@@ -298,7 +301,6 @@ class CallFunctionOnParameters(TypedDict):
     objectGroup: NotRequired[str]
     throwOnSideEffect: NotRequired[bool]
     uniqueContextId: NotRequired[str]
-    generateWebDriverValue: NotRequired[bool]
     serializationOptions: NotRequired[SerializationOptions]
 
 
@@ -335,7 +337,6 @@ class EvaluateParameters(TypedDict):
     replMode: NotRequired[bool]
     allowUnsafeEvalBlockedByCSP: NotRequired[bool]
     uniqueContextId: NotRequired[str]
-    generateWebDriverValue: NotRequired[bool]
     serializationOptions: NotRequired[SerializationOptions]
 
 
@@ -351,6 +352,8 @@ class GetIsolateIdResult(TypedDict):
 class GetHeapUsageResult(TypedDict):
     usedSize: float
     totalSize: float
+    embedderHeapUsedSize: float
+    backingStorageSize: float
 
 
 class GetPropertiesParameters(TypedDict):

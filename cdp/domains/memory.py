@@ -32,10 +32,19 @@ class Module(TypedDict):
     size: float
 
 
+class DOMCounter(TypedDict):
+    name: str
+    count: int
+
+
 class GetDOMCountersResult(TypedDict):
     documents: int
     nodes: int
     jsEventListeners: int
+
+
+class GetDOMCountersForLeakDetectionResult(TypedDict):
+    counters: list[DOMCounter]
 
 
 class SetPressureNotificationsSuppressedParameters(TypedDict):
@@ -72,18 +81,29 @@ class Memory(BaseDomain):
         self,
         session_id: str | None = None,
     ) -> GetDOMCountersResult:
-        """Send Memory.getDOMCounters."""
+        """Retruns current DOM object counters."""
 
         return cast(
             GetDOMCountersResult,
             await self._command("getDOMCounters", None, session_id, {}),
         )
 
+    async def getDOMCountersForLeakDetection(
+        self,
+        session_id: str | None = None,
+    ) -> GetDOMCountersForLeakDetectionResult:
+        """Retruns DOM object counters after preparing renderer for leak detection."""
+
+        return cast(
+            GetDOMCountersForLeakDetectionResult,
+            await self._command("getDOMCountersForLeakDetection", None, session_id, {}),
+        )
+
     async def prepareForLeakDetection(
         self,
         session_id: str | None = None,
     ) -> JsonObject:
-        """Send Memory.prepareForLeakDetection."""
+        """Prepares for leak detection by terminating workers, stopping spellcheckers, dropping non-essential internal caches, running garbage collections, etc."""
 
         return await self._command("prepareForLeakDetection", None, session_id, {})
 
@@ -219,8 +239,10 @@ class Memory(BaseDomain):
 
 
 __all__ = [
+    "DOMCounter",
     "GetAllTimeSamplingProfileResult",
     "GetBrowserSamplingProfileResult",
+    "GetDOMCountersForLeakDetectionResult",
     "GetDOMCountersResult",
     "GetSamplingProfileResult",
     "Memory",

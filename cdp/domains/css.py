@@ -15,8 +15,6 @@ if TYPE_CHECKING:
     from . import page as Page
 
 
-StyleSheetId: TypeAlias = str
-
 StyleSheetOrigin: TypeAlias = Literal["injected", "user-agent", "inspector", "regular"]
 
 
@@ -26,9 +24,19 @@ class PseudoElementMatches(TypedDict):
     matches: list[RuleMatch]
 
 
+class CSSAnimationStyle(TypedDict):
+    name: NotRequired[str]
+    style: CSSStyle
+
+
 class InheritedStyleEntry(TypedDict):
     inlineStyle: NotRequired[CSSStyle]
     matchedCSSRules: list[RuleMatch]
+
+
+class InheritedAnimatedStyleEntry(TypedDict):
+    animationStyles: NotRequired[list[CSSAnimationStyle]]
+    transitionsStyle: NotRequired[CSSStyle]
 
 
 class InheritedPseudoElementMatches(TypedDict):
@@ -46,10 +54,18 @@ class Value(TypedDict):
     specificity: NotRequired[Specificity]
 
 
+class SpecificityComponent(TypedDict):
+    text: str
+    a: int
+    b: int
+    c: int
+
+
 class Specificity(TypedDict):
     a: int
     b: int
     c: int
+    components: NotRequired[list[SpecificityComponent]]
 
 
 class SelectorList(TypedDict):
@@ -58,7 +74,7 @@ class SelectorList(TypedDict):
 
 
 class CSSStyleSheetHeader(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
     frameId: Page.FrameId
     sourceURL: str
     sourceMapURL: NotRequired[str]
@@ -79,26 +95,36 @@ class CSSStyleSheetHeader(TypedDict):
 
 
 class CSSRule(TypedDict):
-    styleSheetId: NotRequired[StyleSheetId]
+    styleSheetId: NotRequired[DOM.StyleSheetId]
     selectorList: SelectorList
     nestingSelectors: NotRequired[list[str]]
     origin: StyleSheetOrigin
     style: CSSStyle
+    originTreeScopeNodeId: NotRequired[DOM.BackendNodeId]
     media: NotRequired[list[CSSMedia]]
     containerQueries: NotRequired[list[CSSContainerQuery]]
     supports: NotRequired[list[CSSSupports]]
     layers: NotRequired[list[CSSLayer]]
     scopes: NotRequired[list[CSSScope]]
     ruleTypes: NotRequired[list[CSSRuleType]]
+    startingStyles: NotRequired[list[CSSStartingStyle]]
+    navigations: NotRequired[list[CSSNavigation]]
 
 
 CSSRuleType: TypeAlias = Literal[
-    "MediaRule", "SupportsRule", "ContainerRule", "LayerRule", "ScopeRule", "StyleRule"
+    "MediaRule",
+    "SupportsRule",
+    "ContainerRule",
+    "LayerRule",
+    "ScopeRule",
+    "StyleRule",
+    "StartingStyleRule",
+    "NavigationRule",
 ]
 
 
 class RuleUsage(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
     startOffset: float
     endOffset: float
     used: bool
@@ -122,8 +148,12 @@ class CSSComputedStyleProperty(TypedDict):
     value: str
 
 
+class ComputedStyleExtraFields(TypedDict):
+    isAppearanceBase: bool
+
+
 class CSSStyle(TypedDict):
-    styleSheetId: NotRequired[StyleSheetId]
+    styleSheetId: NotRequired[DOM.StyleSheetId]
     cssProperties: list[CSSProperty]
     shorthandEntries: list[ShorthandEntry]
     cssText: NotRequired[str]
@@ -147,7 +177,7 @@ class CSSMedia(TypedDict):
     source: Literal["mediaRule", "importRule", "linkedSheet", "inlineSheet"]
     sourceURL: NotRequired[str]
     range: NotRequired[SourceRange]
-    styleSheetId: NotRequired[StyleSheetId]
+    styleSheetId: NotRequired[DOM.StyleSheetId]
     mediaList: NotRequired[list[MediaQuery]]
 
 
@@ -167,29 +197,44 @@ class MediaQueryExpression(TypedDict):
 class CSSContainerQuery(TypedDict):
     text: str
     range: NotRequired[SourceRange]
-    styleSheetId: NotRequired[StyleSheetId]
+    styleSheetId: NotRequired[DOM.StyleSheetId]
     name: NotRequired[str]
     physicalAxes: NotRequired[DOM.PhysicalAxes]
     logicalAxes: NotRequired[DOM.LogicalAxes]
+    queriesScrollState: NotRequired[bool]
+    queriesAnchored: NotRequired[bool]
+    conditionText: str
 
 
 class CSSSupports(TypedDict):
     text: str
     active: bool
     range: NotRequired[SourceRange]
-    styleSheetId: NotRequired[StyleSheetId]
+    styleSheetId: NotRequired[DOM.StyleSheetId]
+
+
+class CSSNavigation(TypedDict):
+    text: str
+    active: NotRequired[bool]
+    range: NotRequired[SourceRange]
+    styleSheetId: NotRequired[DOM.StyleSheetId]
 
 
 class CSSScope(TypedDict):
     text: str
     range: NotRequired[SourceRange]
-    styleSheetId: NotRequired[StyleSheetId]
+    styleSheetId: NotRequired[DOM.StyleSheetId]
 
 
 class CSSLayer(TypedDict):
     text: str
     range: NotRequired[SourceRange]
-    styleSheetId: NotRequired[StyleSheetId]
+    styleSheetId: NotRequired[DOM.StyleSheetId]
+
+
+class CSSStartingStyle(TypedDict):
+    range: NotRequired[SourceRange]
+    styleSheetId: NotRequired[DOM.StyleSheetId]
 
 
 class CSSLayerData(TypedDict):
@@ -200,6 +245,7 @@ class CSSLayerData(TypedDict):
 
 class PlatformFontUsage(TypedDict):
     familyName: str
+    postScriptName: str
     isCustomFont: bool
     glyphCount: float
 
@@ -226,14 +272,17 @@ class FontFace(TypedDict):
 
 
 class CSSTryRule(TypedDict):
-    styleSheetId: NotRequired[StyleSheetId]
+    styleSheetId: NotRequired[DOM.StyleSheetId]
     origin: StyleSheetOrigin
     style: CSSStyle
 
 
-class CSSPositionFallbackRule(TypedDict):
+class CSSPositionTryRule(TypedDict):
     name: Value
-    tryRules: list[CSSTryRule]
+    styleSheetId: NotRequired[DOM.StyleSheetId]
+    origin: StyleSheetOrigin
+    style: CSSStyle
+    active: bool
 
 
 class CSSKeyframesRule(TypedDict):
@@ -241,23 +290,86 @@ class CSSKeyframesRule(TypedDict):
     keyframes: list[CSSKeyframeRule]
 
 
+class CSSPropertyRegistration(TypedDict):
+    propertyName: str
+    initialValue: NotRequired[Value]
+    inherits: bool
+    syntax: str
+
+
+class CSSAtRule(TypedDict):
+    type: Literal[
+        "font-face", "font-feature-values", "font-palette-values", "counter-style"
+    ]
+    subsection: NotRequired[
+        Literal[
+            "swash",
+            "annotation",
+            "ornaments",
+            "stylistic",
+            "styleset",
+            "character-variant",
+        ]
+    ]
+    name: NotRequired[Value]
+    styleSheetId: NotRequired[DOM.StyleSheetId]
+    origin: StyleSheetOrigin
+    style: CSSStyle
+
+
+class CSSPropertyRule(TypedDict):
+    styleSheetId: NotRequired[DOM.StyleSheetId]
+    origin: StyleSheetOrigin
+    propertyName: Value
+    style: CSSStyle
+
+
+class CSSFunctionParameter(TypedDict):
+    name: str
+    type: str
+
+
+class CSSFunctionConditionNode(TypedDict):
+    media: NotRequired[CSSMedia]
+    containerQueries: NotRequired[CSSContainerQuery]
+    supports: NotRequired[CSSSupports]
+    navigation: NotRequired[CSSNavigation]
+    children: list[CSSFunctionNode]
+    conditionText: str
+
+
+class CSSFunctionNode(TypedDict):
+    condition: NotRequired[CSSFunctionConditionNode]
+    style: NotRequired[CSSStyle]
+
+
+class CSSFunctionRule(TypedDict):
+    name: Value
+    styleSheetId: NotRequired[DOM.StyleSheetId]
+    origin: StyleSheetOrigin
+    parameters: list[CSSFunctionParameter]
+    children: list[CSSFunctionNode]
+    originTreeScopeNodeId: NotRequired[DOM.BackendNodeId]
+
+
 class CSSKeyframeRule(TypedDict):
-    styleSheetId: NotRequired[StyleSheetId]
+    styleSheetId: NotRequired[DOM.StyleSheetId]
     origin: StyleSheetOrigin
     keyText: Value
     style: CSSStyle
 
 
 class StyleDeclarationEdit(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
     range: SourceRange
     text: str
 
 
 class AddRuleParameters(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
     ruleText: str
     location: SourceRange
+    nodeForPropertySyntaxValidation: NotRequired[DOM.NodeId]
 
 
 class AddRuleResult(TypedDict):
@@ -265,7 +377,7 @@ class AddRuleResult(TypedDict):
 
 
 class CollectClassNamesParameters(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
 
 
 class CollectClassNamesResult(TypedDict):
@@ -274,15 +386,21 @@ class CollectClassNamesResult(TypedDict):
 
 class CreateStyleSheetParameters(TypedDict):
     frameId: Page.FrameId
+    force: NotRequired[bool]
 
 
 class CreateStyleSheetResult(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
 
 
 class ForcePseudoStateParameters(TypedDict):
     nodeId: DOM.NodeId
     forcedPseudoClasses: list[str]
+
+
+class ForceStartingStyleParameters(TypedDict):
+    nodeId: DOM.NodeId
+    forced: bool
 
 
 class GetBackgroundColorsParameters(TypedDict):
@@ -301,6 +419,28 @@ class GetComputedStyleForNodeParameters(TypedDict):
 
 class GetComputedStyleForNodeResult(TypedDict):
     computedStyle: list[CSSComputedStyleProperty]
+    extraFields: ComputedStyleExtraFields
+
+
+class ResolveValuesParameters(TypedDict):
+    values: list[str]
+    nodeId: DOM.NodeId
+    propertyName: NotRequired[str]
+    pseudoType: NotRequired[DOM.PseudoType]
+    pseudoIdentifier: NotRequired[str]
+
+
+class ResolveValuesResult(TypedDict):
+    results: list[str]
+
+
+class GetLonghandPropertiesParameters(TypedDict):
+    shorthandName: str
+    value: str
+
+
+class GetLonghandPropertiesResult(TypedDict):
+    longhandProperties: list[CSSProperty]
 
 
 class GetInlineStylesForNodeParameters(TypedDict):
@@ -310,6 +450,16 @@ class GetInlineStylesForNodeParameters(TypedDict):
 class GetInlineStylesForNodeResult(TypedDict):
     inlineStyle: NotRequired[CSSStyle]
     attributesStyle: NotRequired[CSSStyle]
+
+
+class GetAnimatedStylesForNodeParameters(TypedDict):
+    nodeId: DOM.NodeId
+
+
+class GetAnimatedStylesForNodeResult(TypedDict):
+    animationStyles: NotRequired[list[CSSAnimationStyle]]
+    transitionsStyle: NotRequired[CSSStyle]
+    inherited: NotRequired[list[InheritedAnimatedStyleEntry]]
 
 
 class GetMatchedStylesForNodeParameters(TypedDict):
@@ -324,8 +474,17 @@ class GetMatchedStylesForNodeResult(TypedDict):
     inherited: NotRequired[list[InheritedStyleEntry]]
     inheritedPseudoElements: NotRequired[list[InheritedPseudoElementMatches]]
     cssKeyframesRules: NotRequired[list[CSSKeyframesRule]]
-    cssPositionFallbackRules: NotRequired[list[CSSPositionFallbackRule]]
+    cssPositionTryRules: NotRequired[list[CSSPositionTryRule]]
+    activePositionFallbackIndex: NotRequired[int]
+    cssPropertyRules: NotRequired[list[CSSPropertyRule]]
+    cssPropertyRegistrations: NotRequired[list[CSSPropertyRegistration]]
+    cssAtRules: NotRequired[list[CSSAtRule]]
     parentLayoutNodeId: NotRequired[DOM.NodeId]
+    cssFunctionRules: NotRequired[list[CSSFunctionRule]]
+
+
+class GetEnvironmentVariablesResult(TypedDict):
+    environmentVariables: JsonObject
 
 
 class GetMediaQueriesResult(TypedDict):
@@ -341,7 +500,7 @@ class GetPlatformFontsForNodeResult(TypedDict):
 
 
 class GetStyleSheetTextParameters(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
 
 
 class GetStyleSheetTextResult(TypedDict):
@@ -354,6 +513,19 @@ class GetLayersForNodeParameters(TypedDict):
 
 class GetLayersForNodeResult(TypedDict):
     rootLayer: CSSLayerData
+
+
+class GetLocationForSelectorParameters(TypedDict):
+    styleSheetId: DOM.StyleSheetId
+    selectorText: str
+
+
+class GetLocationForSelectorResult(TypedDict):
+    ranges: list[SourceRange]
+
+
+class TrackComputedStyleUpdatesForNodeParameters(TypedDict):
+    nodeId: NotRequired[DOM.NodeId]
 
 
 class TrackComputedStyleUpdatesParameters(TypedDict):
@@ -370,8 +542,18 @@ class SetEffectivePropertyValueForNodeParameters(TypedDict):
     value: str
 
 
+class SetPropertyRulePropertyNameParameters(TypedDict):
+    styleSheetId: DOM.StyleSheetId
+    range: SourceRange
+    propertyName: str
+
+
+class SetPropertyRulePropertyNameResult(TypedDict):
+    propertyName: Value
+
+
 class SetKeyframeKeyParameters(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
     range: SourceRange
     keyText: str
 
@@ -381,7 +563,7 @@ class SetKeyframeKeyResult(TypedDict):
 
 
 class SetMediaTextParameters(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
     range: SourceRange
     text: str
 
@@ -391,7 +573,7 @@ class SetMediaTextResult(TypedDict):
 
 
 class SetContainerQueryTextParameters(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
     range: SourceRange
     text: str
 
@@ -400,8 +582,18 @@ class SetContainerQueryTextResult(TypedDict):
     containerQuery: CSSContainerQuery
 
 
+class SetContainerQueryConditionTextParameters(TypedDict):
+    styleSheetId: DOM.StyleSheetId
+    range: SourceRange
+    text: str
+
+
+class SetContainerQueryConditionTextResult(TypedDict):
+    containerQuery: CSSContainerQuery
+
+
 class SetSupportsTextParameters(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
     range: SourceRange
     text: str
 
@@ -410,8 +602,18 @@ class SetSupportsTextResult(TypedDict):
     supports: CSSSupports
 
 
+class SetNavigationTextParameters(TypedDict):
+    styleSheetId: DOM.StyleSheetId
+    range: SourceRange
+    text: str
+
+
+class SetNavigationTextResult(TypedDict):
+    navigation: CSSNavigation
+
+
 class SetScopeTextParameters(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
     range: SourceRange
     text: str
 
@@ -421,7 +623,7 @@ class SetScopeTextResult(TypedDict):
 
 
 class SetRuleSelectorParameters(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
     range: SourceRange
     selector: str
 
@@ -431,7 +633,7 @@ class SetRuleSelectorResult(TypedDict):
 
 
 class SetStyleSheetTextParameters(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
     text: str
 
 
@@ -441,6 +643,7 @@ class SetStyleSheetTextResult(TypedDict):
 
 class SetStyleTextsParameters(TypedDict):
     edits: list[StyleDeclarationEdit]
+    nodeForPropertySyntaxValidation: NotRequired[DOM.NodeId]
 
 
 class SetStyleTextsResult(TypedDict):
@@ -469,11 +672,15 @@ class StyleSheetAddedEvent(TypedDict):
 
 
 class StyleSheetChangedEvent(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
 
 
 class StyleSheetRemovedEvent(TypedDict):
-    styleSheetId: StyleSheetId
+    styleSheetId: DOM.StyleSheetId
+
+
+class ComputedStyleUpdatedEvent(TypedDict):
+    nodeId: DOM.NodeId
 
 
 class CSS(BaseDomain):
@@ -606,6 +813,31 @@ class CSS(BaseDomain):
         return await self._command("forcePseudoState", params, session_id, kwargs)
 
     @overload
+    async def forceStartingStyle(
+        self,
+        params: ForceStartingStyleParameters,
+        session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def forceStartingStyle(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[ForceStartingStyleParameters],
+    ) -> JsonObject: ...
+
+    async def forceStartingStyle(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> JsonObject:
+        """Ensures that the given node is in its starting-style state."""
+
+        return await self._command("forceStartingStyle", params, session_id, kwargs)
+
+    @overload
     async def getBackgroundColors(
         self,
         params: GetBackgroundColorsParameters,
@@ -662,6 +894,62 @@ class CSS(BaseDomain):
         )
 
     @overload
+    async def resolveValues(
+        self,
+        params: ResolveValuesParameters,
+        session_id: str | None = None,
+    ) -> ResolveValuesResult: ...
+
+    @overload
+    async def resolveValues(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[ResolveValuesParameters],
+    ) -> ResolveValuesResult: ...
+
+    async def resolveValues(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> ResolveValuesResult:
+        """Resolve the specified values in the context of the provided element. For example, a value of '1em' is evaluated according to the computed 'font-size' of the element and a value 'calc(1px + 2px)' will be resolved to '3px'. If the `propertyName` was specified the `values` are resolved as if they were property's declaration. If a value cannot be parsed according to the provided property syntax, the value is parsed using combined syntax as if null `propertyName` was provided. If the value cannot be resolved even then, return the provided value without any changes. Note: this function currently does not resolve CSS random() function, it returns unmodified random() function parts.`"""
+
+        return cast(
+            ResolveValuesResult,
+            await self._command("resolveValues", params, session_id, kwargs),
+        )
+
+    @overload
+    async def getLonghandProperties(
+        self,
+        params: GetLonghandPropertiesParameters,
+        session_id: str | None = None,
+    ) -> GetLonghandPropertiesResult: ...
+
+    @overload
+    async def getLonghandProperties(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[GetLonghandPropertiesParameters],
+    ) -> GetLonghandPropertiesResult: ...
+
+    async def getLonghandProperties(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> GetLonghandPropertiesResult:
+        """Send CSS.getLonghandProperties."""
+
+        return cast(
+            GetLonghandPropertiesResult,
+            await self._command("getLonghandProperties", params, session_id, kwargs),
+        )
+
+    @overload
     async def getInlineStylesForNode(
         self,
         params: GetInlineStylesForNodeParameters,
@@ -690,6 +978,34 @@ class CSS(BaseDomain):
         )
 
     @overload
+    async def getAnimatedStylesForNode(
+        self,
+        params: GetAnimatedStylesForNodeParameters,
+        session_id: str | None = None,
+    ) -> GetAnimatedStylesForNodeResult: ...
+
+    @overload
+    async def getAnimatedStylesForNode(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[GetAnimatedStylesForNodeParameters],
+    ) -> GetAnimatedStylesForNodeResult: ...
+
+    async def getAnimatedStylesForNode(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> GetAnimatedStylesForNodeResult:
+        """Returns the styles coming from animations & transitions including the animation & transition styles coming from inheritance chain."""
+
+        return cast(
+            GetAnimatedStylesForNodeResult,
+            await self._command("getAnimatedStylesForNode", params, session_id, kwargs),
+        )
+
+    @overload
     async def getMatchedStylesForNode(
         self,
         params: GetMatchedStylesForNodeParameters,
@@ -715,6 +1031,17 @@ class CSS(BaseDomain):
         return cast(
             GetMatchedStylesForNodeResult,
             await self._command("getMatchedStylesForNode", params, session_id, kwargs),
+        )
+
+    async def getEnvironmentVariables(
+        self,
+        session_id: str | None = None,
+    ) -> GetEnvironmentVariablesResult:
+        """Returns the values of the default UA-defined environment variables used in env()"""
+
+        return cast(
+            GetEnvironmentVariablesResult,
+            await self._command("getEnvironmentVariables", None, session_id, {}),
         )
 
     async def getMediaQueries(
@@ -813,6 +1140,61 @@ class CSS(BaseDomain):
         )
 
     @overload
+    async def getLocationForSelector(
+        self,
+        params: GetLocationForSelectorParameters,
+        session_id: str | None = None,
+    ) -> GetLocationForSelectorResult: ...
+
+    @overload
+    async def getLocationForSelector(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[GetLocationForSelectorParameters],
+    ) -> GetLocationForSelectorResult: ...
+
+    async def getLocationForSelector(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> GetLocationForSelectorResult:
+        """Given a CSS selector text and a style sheet ID, getLocationForSelector returns an array of locations of the CSS selector in the style sheet."""
+
+        return cast(
+            GetLocationForSelectorResult,
+            await self._command("getLocationForSelector", params, session_id, kwargs),
+        )
+
+    @overload
+    async def trackComputedStyleUpdatesForNode(
+        self,
+        params: TrackComputedStyleUpdatesForNodeParameters,
+        session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def trackComputedStyleUpdatesForNode(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[TrackComputedStyleUpdatesForNodeParameters],
+    ) -> JsonObject: ...
+
+    async def trackComputedStyleUpdatesForNode(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> JsonObject:
+        """Starts tracking the given node for the computed style updates and whenever the computed style is updated for node, it queues a `computedStyleUpdated` event with throttling. There can only be 1 node tracked for computed style updates so passing a new node id removes tracking from the previous node. Pass `undefined` to disable tracking."""
+
+        return await self._command(
+            "trackComputedStyleUpdatesForNode", params, session_id, kwargs
+        )
+
+    @overload
     async def trackComputedStyleUpdates(
         self,
         params: TrackComputedStyleUpdatesParameters,
@@ -875,6 +1257,36 @@ class CSS(BaseDomain):
 
         return await self._command(
             "setEffectivePropertyValueForNode", params, session_id, kwargs
+        )
+
+    @overload
+    async def setPropertyRulePropertyName(
+        self,
+        params: SetPropertyRulePropertyNameParameters,
+        session_id: str | None = None,
+    ) -> SetPropertyRulePropertyNameResult: ...
+
+    @overload
+    async def setPropertyRulePropertyName(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[SetPropertyRulePropertyNameParameters],
+    ) -> SetPropertyRulePropertyNameResult: ...
+
+    async def setPropertyRulePropertyName(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> SetPropertyRulePropertyNameResult:
+        """Modifies the property rule property name."""
+
+        return cast(
+            SetPropertyRulePropertyNameResult,
+            await self._command(
+                "setPropertyRulePropertyName", params, session_id, kwargs
+            ),
         )
 
     @overload
@@ -954,11 +1366,41 @@ class CSS(BaseDomain):
         session_id: str | None = None,
         **kwargs: object,
     ) -> SetContainerQueryTextResult:
-        """Modifies the expression of a container query."""
+        """Modifies the expression of a container query. Deprecated. Use setContainerQueryConditionText instead."""
 
         return cast(
             SetContainerQueryTextResult,
             await self._command("setContainerQueryText", params, session_id, kwargs),
+        )
+
+    @overload
+    async def setContainerQueryConditionText(
+        self,
+        params: SetContainerQueryConditionTextParameters,
+        session_id: str | None = None,
+    ) -> SetContainerQueryConditionTextResult: ...
+
+    @overload
+    async def setContainerQueryConditionText(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[SetContainerQueryConditionTextParameters],
+    ) -> SetContainerQueryConditionTextResult: ...
+
+    async def setContainerQueryConditionText(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> SetContainerQueryConditionTextResult:
+        """Send CSS.setContainerQueryConditionText."""
+
+        return cast(
+            SetContainerQueryConditionTextResult,
+            await self._command(
+                "setContainerQueryConditionText", params, session_id, kwargs
+            ),
         )
 
     @overload
@@ -987,6 +1429,34 @@ class CSS(BaseDomain):
         return cast(
             SetSupportsTextResult,
             await self._command("setSupportsText", params, session_id, kwargs),
+        )
+
+    @overload
+    async def setNavigationText(
+        self,
+        params: SetNavigationTextParameters,
+        session_id: str | None = None,
+    ) -> SetNavigationTextResult: ...
+
+    @overload
+    async def setNavigationText(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[SetNavigationTextParameters],
+    ) -> SetNavigationTextResult: ...
+
+    async def setNavigationText(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> SetNavigationTextResult:
+        """Modifies the expression of a navigation at-rule."""
+
+        return cast(
+            SetNavigationTextResult,
+            await self._command("setNavigationText", params, session_id, kwargs),
         )
 
     @overload
@@ -1395,43 +1865,114 @@ class CSS(BaseDomain):
             ),
         )
 
+    @overload
+    def computedStyleUpdated(
+        self,
+        callback_or_session: EventCallback[ComputedStyleUpdatedEvent],
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def computedStyleUpdated(
+        self,
+        callback_or_session: str,
+        handler: EventCallback[ComputedStyleUpdatedEvent],
+        *,
+        session_id: str | None = None,
+    ) -> Unsubscribe: ...
+
+    @overload
+    def computedStyleUpdated(
+        self,
+        callback_or_session: str | None = None,
+        handler: None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[ComputedStyleUpdatedEvent]: ...
+
+    def computedStyleUpdated(
+        self,
+        callback_or_session: EventCallback[ComputedStyleUpdatedEvent]
+        | str
+        | None = None,
+        handler: EventCallback[ComputedStyleUpdatedEvent] | None = None,
+        *,
+        session_id: str | None = None,
+    ) -> Awaitable[ComputedStyleUpdatedEvent] | Unsubscribe:
+        """Wait for or subscribe to CSS.computedStyleUpdated."""
+
+        return cast(
+            Awaitable[ComputedStyleUpdatedEvent] | Unsubscribe,
+            self._event(
+                "computedStyleUpdated",
+                cast(
+                    EventCallback[Mapping[str, object]] | str | None,
+                    callback_or_session,
+                ),
+                cast(EventCallback[Mapping[str, object]] | None, handler),
+                session_id,
+            ),
+        )
+
 
 __all__ = [
     "CSS",
     "AddRuleParameters",
     "AddRuleResult",
+    "CSSAnimationStyle",
+    "CSSAtRule",
     "CSSComputedStyleProperty",
     "CSSContainerQuery",
+    "CSSFunctionConditionNode",
+    "CSSFunctionNode",
+    "CSSFunctionParameter",
+    "CSSFunctionRule",
     "CSSKeyframeRule",
     "CSSKeyframesRule",
     "CSSLayer",
     "CSSLayerData",
     "CSSMedia",
-    "CSSPositionFallbackRule",
+    "CSSNavigation",
+    "CSSPositionTryRule",
     "CSSProperty",
+    "CSSPropertyRegistration",
+    "CSSPropertyRule",
     "CSSRule",
     "CSSRuleType",
     "CSSScope",
+    "CSSStartingStyle",
     "CSSStyle",
     "CSSStyleSheetHeader",
     "CSSSupports",
     "CSSTryRule",
     "CollectClassNamesParameters",
     "CollectClassNamesResult",
+    "ComputedStyleExtraFields",
+    "ComputedStyleUpdatedEvent",
     "CreateStyleSheetParameters",
     "CreateStyleSheetResult",
     "FontFace",
     "FontVariationAxis",
     "FontsUpdatedEvent",
     "ForcePseudoStateParameters",
+    "ForceStartingStyleParameters",
+    "GetAnimatedStylesForNodeParameters",
+    "GetAnimatedStylesForNodeResult",
     "GetBackgroundColorsParameters",
     "GetBackgroundColorsResult",
     "GetComputedStyleForNodeParameters",
     "GetComputedStyleForNodeResult",
+    "GetEnvironmentVariablesResult",
     "GetInlineStylesForNodeParameters",
     "GetInlineStylesForNodeResult",
     "GetLayersForNodeParameters",
     "GetLayersForNodeResult",
+    "GetLocationForSelectorParameters",
+    "GetLocationForSelectorResult",
+    "GetLonghandPropertiesParameters",
+    "GetLonghandPropertiesResult",
     "GetMatchedStylesForNodeParameters",
     "GetMatchedStylesForNodeResult",
     "GetMediaQueriesResult",
@@ -1439,15 +1980,20 @@ __all__ = [
     "GetPlatformFontsForNodeResult",
     "GetStyleSheetTextParameters",
     "GetStyleSheetTextResult",
+    "InheritedAnimatedStyleEntry",
     "InheritedPseudoElementMatches",
     "InheritedStyleEntry",
     "MediaQuery",
     "MediaQueryExpression",
     "PlatformFontUsage",
     "PseudoElementMatches",
+    "ResolveValuesParameters",
+    "ResolveValuesResult",
     "RuleMatch",
     "RuleUsage",
     "SelectorList",
+    "SetContainerQueryConditionTextParameters",
+    "SetContainerQueryConditionTextResult",
     "SetContainerQueryTextParameters",
     "SetContainerQueryTextResult",
     "SetEffectivePropertyValueForNodeParameters",
@@ -1456,6 +2002,10 @@ __all__ = [
     "SetLocalFontsEnabledParameters",
     "SetMediaTextParameters",
     "SetMediaTextResult",
+    "SetNavigationTextParameters",
+    "SetNavigationTextResult",
+    "SetPropertyRulePropertyNameParameters",
+    "SetPropertyRulePropertyNameResult",
     "SetRuleSelectorParameters",
     "SetRuleSelectorResult",
     "SetScopeTextParameters",
@@ -1469,15 +2019,16 @@ __all__ = [
     "ShorthandEntry",
     "SourceRange",
     "Specificity",
+    "SpecificityComponent",
     "StopRuleUsageTrackingResult",
     "StyleDeclarationEdit",
     "StyleSheetAddedEvent",
     "StyleSheetChangedEvent",
-    "StyleSheetId",
     "StyleSheetOrigin",
     "StyleSheetRemovedEvent",
     "TakeComputedStyleUpdatesResult",
     "TakeCoverageDeltaResult",
+    "TrackComputedStyleUpdatesForNodeParameters",
     "TrackComputedStyleUpdatesParameters",
     "Value",
 ]
