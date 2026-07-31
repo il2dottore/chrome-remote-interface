@@ -35,9 +35,11 @@ async def main() -> None:
         await load_event
         print(f"Loaded target {target_id} in session {session_id}")
     finally:
-        if target_id is not None:
-            await browser.Target.closeTarget(targetId=target_id)
-        await browser.close()
+        try:
+            if target_id is not None:
+                await browser.Target.closeTarget(targetId=target_id)
+        finally:
+            await browser.close()
 
 
 if __name__ == "__main__":

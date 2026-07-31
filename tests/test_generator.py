@@ -70,6 +70,7 @@ class GeneratorTests(unittest.TestCase):
                 json.loads((package / "protocol.json").read_text(encoding="utf-8")),
                 descriptor,
             )
+            generate(package / "protocol.json", package)
 
 
 if __name__ == "__main__":

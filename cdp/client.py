@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import math
 from collections import defaultdict
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import suppress
@@ -28,6 +29,8 @@ from .types import (
 
 Listener = Callable[..., object]
 Unsubscribe = Callable[[], None]
+
+DEFAULT_CLOSE_TIMEOUT = 5.0
 
 
 class WebSocket(TypingProtocol):
@@ -72,7 +75,26 @@ def _option_number(
     value = options.get(key, default)
     if not isinstance(value, int | float) or isinstance(value, bool):
         raise TypeError(f"{key} must be a number")
-    return float(value)
+    number = float(value)
+    if not math.isfinite(number) or number < 0:
+        raise ValueError(f"{key} must be a finite, non-negative number")
+    return number
+
+
+def _option_optional_number(
+    options: Mapping[str, object],
+    key: str,
+    default: float | None,
+) -> float | None:
+    value = options.get(key, default)
+    if value is None:
+        return None
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        raise TypeError(f"{key} must be a number or None")
+    number = float(value)
+    if not math.isfinite(number) or number < 0:
+        raise ValueError(f"{key} must be a finite, non-negative number")
+    return number
 
 
 def _option_boolean(
@@ -122,24 +144,40 @@ class Client(DomainHints):
         websocket: WebSocket,
         websocket_url: str,
         protocol: ProtocolDescriptor,
+        *,
+        close_timeout: float = DEFAULT_CLOSE_TIMEOUT,
+        command_timeout: float | None = None,
     ) -> None:
+        if not math.isfinite(close_timeout) or close_timeout < 0:
+            raise ValueError("close_timeout must be a finite, non-negative number")
+        if command_timeout is not None and (
+            not math.isfinite(command_timeout) or command_timeout < 0
+        ):
+            raise ValueError(
+                "command_timeout must be a finite, non-negative number or None"
+            )
         self.webSocketUrl = websocket_url
         self.websocket_url = websocket_url
         self.protocol = protocol
         self._websocket = websocket
+        self._close_timeout = close_timeout
+        self._command_timeout = command_timeout
         self._next_command_id = 1
         self._pending: dict[int, tuple[asyncio.Future[JsonObject], JsonObject]] = {}
         self._listeners: dict[str, list[Listener]] = defaultdict(list)
         self._session_listeners: dict[tuple[str, str], list[Listener]] = defaultdict(
             list
         )
-        self._callback_tasks: set[asyncio.Future[object]] = set()
+        self._waiter_cleanups: dict[Unsubscribe, tuple[str, str | None]] = {}
+        self._callback_tasks: set[asyncio.Task[object]] = set()
         self._closed = False
+        self._cleanup_complete = False
+        self._close_lock = asyncio.Lock()
+        self._install_domains()
         self._receiver = asyncio.create_task(
             self._receive_loop(),
             name="chrome-remote-interface receiver",
         )
-        self._install_domains()
 
     def _install_domains(self) -> None:
         from .domain import DynamicDomain
@@ -204,10 +242,24 @@ class Client(DomainHints):
             await self._websocket.send(
                 json.dumps(request, separators=(",", ":"), ensure_ascii=False)
             )
+        except asyncio.CancelledError:
+            self._pending.pop(command_id, None)
+            raise
         except Exception:
             self._pending.pop(command_id, None)
             raise
-        return await future
+        try:
+            if self._command_timeout is None:
+                return await future
+            return await asyncio.wait_for(future, timeout=self._command_timeout)
+        except asyncio.TimeoutError:
+            self._pending.pop(command_id, None)
+            if not future.done():
+                future.cancel()
+            raise
+        except asyncio.CancelledError:
+            self._pending.pop(command_id, None)
+            raise
 
     def on(self, event_name: str, callback: Listener) -> Unsubscribe:
         """Subscribe to a raw client event."""
@@ -218,6 +270,8 @@ class Client(DomainHints):
         def unsubscribe() -> None:
             with suppress(ValueError):
                 listeners.remove(callback)
+            if not listeners:
+                self._listeners.pop(event_name, None)
 
         return unsubscribe
 
@@ -234,6 +288,7 @@ class Client(DomainHints):
                 future.set_result(args[0] if len(args) == 1 else args)
 
         unsubscribe = self.on(event_name, resolve)
+        self._track_waiter(future, unsubscribe, event_name, session_id=None)
         return future
 
     def on_event(
@@ -254,6 +309,11 @@ class Client(DomainHints):
         def unsubscribe() -> None:
             with suppress(ValueError):
                 listeners.remove(callback)
+            if not listeners:
+                if session_id is None:
+                    self._listeners.pop(method, None)
+                else:
+                    self._session_listeners.pop((method, session_id), None)
 
         return unsubscribe
 
@@ -266,7 +326,7 @@ class Client(DomainHints):
         """Wait for one CDP event."""
 
         loop = asyncio.get_running_loop()
-        future: asyncio.Future[JsonObject] = loop.create_future()
+        future: asyncio.Future[object] = loop.create_future()
         unsubscribe: Unsubscribe
 
         def resolve(payload: JsonObject) -> None:
@@ -275,7 +335,37 @@ class Client(DomainHints):
                 future.set_result(payload)
 
         unsubscribe = self.on_event(method, resolve, session_id=session_id)
-        return future
+        self._track_waiter(future, unsubscribe, method, session_id=session_id)
+        return cast(Awaitable[JsonObject], future)
+
+    def _track_waiter(
+        self,
+        future: asyncio.Future[object],
+        unsubscribe: Unsubscribe,
+        event_name: str,
+        session_id: str | None,
+    ) -> None:
+        def cleanup() -> None:
+            self._waiter_cleanups.pop(cleanup, None)
+            unsubscribe()
+            if not future.done():
+                future.cancel()
+
+        self._waiter_cleanups[cleanup] = (event_name, session_id)
+        future.add_done_callback(lambda _future: cleanup())
+
+    def _cancel_waiters(
+        self,
+        event_name: str | None = None,
+        session_id: str | None = None,
+    ) -> None:
+        for cleanup, (registered_event, registered_session) in tuple(
+            self._waiter_cleanups.items()
+        ):
+            if (event_name is None or registered_event == event_name) and (
+                session_id is None or registered_session == session_id
+            ):
+                cleanup()
 
     def remove_all_listeners(self, event_name: str | None = None) -> None:
         """Remove raw and protocol event listeners."""
@@ -283,27 +373,46 @@ class Client(DomainHints):
         if event_name is None:
             self._listeners.clear()
             self._session_listeners.clear()
+            self._cancel_waiters()
         else:
             self._listeners.pop(event_name, None)
             for key in [key for key in self._session_listeners if key[0] == event_name]:
                 self._session_listeners.pop(key, None)
+            self._cancel_waiters(event_name)
+
+    def remove_session_listeners(self, session_id: str) -> None:
+        """Remove event listeners and waiters associated with a CDP session."""
+
+        for key in [key for key in self._session_listeners if key[1] == session_id]:
+            self._session_listeners.pop(key, None)
+        self._cancel_waiters(session_id=session_id)
+
+    async def _close_websocket(self) -> None:
+        with suppress(Exception):
+            await asyncio.wait_for(
+                self._websocket.close(),
+                timeout=self._close_timeout,
+            )
 
     async def close(self) -> None:
         """Close the connection and fail commands that are still pending."""
 
-        if self._closed:
-            return
-        self._closed = True
-        await self._websocket.close()
-        for task in self._callback_tasks:
-            task.cancel()
-        self._callback_tasks.clear()
-        if self._receiver is not asyncio.current_task():
-            if not self._receiver.done():
-                self._receiver.cancel()
-            with suppress(asyncio.CancelledError, ConnectionClosed):
-                await self._receiver
-        self._fail_pending()
+        async with self._close_lock:
+            if self._cleanup_complete:
+                return
+            self._closed = True
+            self._cancel_waiters()
+            self._fail_pending()
+            await self._close_websocket()
+            current_task = asyncio.current_task()
+            if self._receiver is not current_task:
+                if not self._receiver.done():
+                    self._receiver.cancel()
+                with suppress(asyncio.CancelledError, ConnectionClosed):
+                    await self._receiver
+            await self._cancel_callback_tasks(exclude=current_task)
+            self._fail_pending()
+            self._cleanup_complete = True
 
     async def __aenter__(self) -> Client:
         return self
@@ -317,19 +426,35 @@ class Client(DomainHints):
         await self.close()
 
     async def _receive_loop(self) -> None:
+        unexpected_error: BaseException | None = None
         try:
             while True:
                 raw = await self._websocket.recv()
                 if isinstance(raw, bytes):
                     raw = raw.decode("utf-8")
-                message = cast(JsonObject, json.loads(raw))
+                decoded: object = json.loads(raw)
+                if not isinstance(decoded, dict):
+                    raise ValueError("CDP message must be a JSON object")
+                message = cast(JsonObject, decoded)
                 self._handle_message(message)
         except (ConnectionClosed, asyncio.CancelledError):
             pass
+        except Exception as error:
+            unexpected_error = error
         finally:
             was_closed = self._closed
             self._closed = True
+            self._cancel_waiters()
             self._fail_pending()
+            self._cancel_callback_tasks_nowait()
+            if unexpected_error is not None:
+                asyncio.get_running_loop().call_exception_handler(
+                    {
+                        "message": "CDP receiver stopped unexpectedly",
+                        "exception": unexpected_error,
+                    }
+                )
+                await self._close_websocket()
             if not was_closed:
                 self._emit("disconnect")
 
@@ -343,7 +468,7 @@ class Client(DomainHints):
 
     def _handle_message(self, message: JsonObject) -> None:
         command_id = message.get("id")
-        if isinstance(command_id, int):
+        if isinstance(command_id, int) and not isinstance(command_id, bool):
             pending = self._pending.pop(command_id, None)
             if pending is None:
                 return
@@ -351,7 +476,11 @@ class Client(DomainHints):
             if future.done():
                 return
             error = message.get("error")
-            if isinstance(error, dict):
+            if error is not None and not isinstance(error, dict):
+                future.set_exception(
+                    ValueError("CDP error response must be a JSON object")
+                )
+            elif isinstance(error, dict):
                 future.set_exception(
                     ProtocolError(
                         request,
@@ -360,7 +489,12 @@ class Client(DomainHints):
                 )
             else:
                 result = message.get("result", {})
-                future.set_result(cast(JsonObject, result))
+                if not isinstance(result, dict):
+                    future.set_exception(
+                        ValueError("CDP command result must be a JSON object")
+                    )
+                else:
+                    future.set_result(cast(JsonObject, result))
             if not self._pending:
                 self._emit("ready")
             return
@@ -373,11 +507,17 @@ class Client(DomainHints):
         self._emit("event", message)
         self._emit(method, payload)
         if isinstance(session_id, str):
-            for callback in tuple(self._session_listeners[(method, session_id)]):
+            for callback in tuple(
+                self._session_listeners.get((method, session_id), ())
+            ):
                 self._invoke(callback, payload)
+        if method == "Target.detachedFromTarget":
+            detached_session_id = payload.get("sessionId")
+            if isinstance(detached_session_id, str):
+                self.remove_session_listeners(detached_session_id)
 
     def _emit(self, event_name: str, *args: object) -> None:
-        for callback in tuple(self._listeners[event_name]):
+        for callback in tuple(self._listeners.get(event_name, ())):
             self._invoke(callback, *args)
 
     def _invoke(self, callback: Listener, *args: object) -> None:
@@ -386,7 +526,7 @@ class Client(DomainHints):
             if inspect.isawaitable(result):
                 task = asyncio.ensure_future(cast(Awaitable[object], result))
                 self._callback_tasks.add(task)
-                task.add_done_callback(self._callback_tasks.discard)
+                task.add_done_callback(self._callback_done)
         except Exception as error:
             asyncio.get_running_loop().call_exception_handler(
                 {
@@ -394,6 +534,37 @@ class Client(DomainHints):
                     "exception": error,
                 }
             )
+
+    def _callback_done(self, task: asyncio.Task[object]) -> None:
+        self._callback_tasks.discard(task)
+        if task.cancelled():
+            return
+        exception = task.exception()
+        if exception is not None:
+            asyncio.get_running_loop().call_exception_handler(
+                {
+                    "message": "Unhandled exception in CDP async event callback",
+                    "exception": exception,
+                    "future": task,
+                }
+            )
+
+    async def _cancel_callback_tasks(
+        self,
+        *,
+        exclude: asyncio.Task[object] | None,
+    ) -> None:
+        tasks = [task for task in self._callback_tasks if task is not exclude]
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._callback_tasks.difference_update(tasks)
+
+    def _cancel_callback_tasks_nowait(self) -> None:
+        for task in tuple(self._callback_tasks):
+            task.cancel()
+        self._callback_tasks.clear()
 
 
 async def connect(
@@ -407,6 +578,8 @@ async def connect(
     protocol: ProtocolDescriptor | None = None,
     local: bool = False,
     timeout: float = 10.0,
+    close_timeout: float = DEFAULT_CLOSE_TIMEOUT,
+    command_timeout: float | None = None,
 ) -> Client:
     """Connect to a Chrome DevTools Protocol target."""
 
@@ -428,6 +601,10 @@ async def connect(
             "protocol",
             "local",
             "timeout",
+            "close_timeout",
+            "closeTimeout",
+            "command_timeout",
+            "commandTimeout",
             "target",
         }
         if target_mapping.keys() & option_keys:
@@ -461,6 +638,24 @@ async def connect(
                 protocol = normalized_protocol
             local = _option_boolean(options, "local", local)
             timeout = _option_number(options, "timeout", timeout)
+            close_timeout_value = _option(options, "close_timeout", "closeTimeout")
+            if close_timeout_value is not None:
+                if not isinstance(close_timeout_value, int | float) or isinstance(
+                    close_timeout_value, bool
+                ):
+                    raise TypeError("close_timeout must be a number")
+                close_timeout = float(close_timeout_value)
+            if "command_timeout" in options or "commandTimeout" in options:
+                command_timeout_value = _option(
+                    options,
+                    "command_timeout",
+                    "commandTimeout",
+                )
+                command_timeout = _option_optional_number(
+                    {"command_timeout": command_timeout_value},
+                    "command_timeout",
+                    command_timeout,
+                )
         else:
             resolved_target = target_mapping
     elif target_mapping is not None:
@@ -490,6 +685,7 @@ async def connect(
         protocol_options["host"] = parsed.hostname
     if parsed.port:
         protocol_options["port"] = parsed.port
+    protocol_options["secure"] = secure or parsed.scheme == "wss"
     descriptor = (
         protocol
         if protocol is not None
@@ -501,7 +697,18 @@ async def connect(
         max_size=256 * 1024 * 1024,
         open_timeout=timeout,
     )
-    return Client(cast(WebSocket, websocket), websocket_url, descriptor)
+    try:
+        return Client(
+            cast(WebSocket, websocket),
+            websocket_url,
+            descriptor,
+            close_timeout=close_timeout,
+            command_timeout=command_timeout,
+        )
+    except BaseException:
+        with suppress(Exception):
+            await websocket.close()
+        raise
 
 
 async def _resolve_target(

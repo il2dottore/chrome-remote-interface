@@ -438,21 +438,19 @@ def generate(protocol_path: Path, package_path: Path) -> None:
     destination = package_path / "domains"
     destination.mkdir(parents=True, exist_ok=True)
     expected: set[Path] = set()
+    generated: dict[Path, str] = {}
     registry: list[tuple[str, str, str]] = []
     for raw_domain in domains:
         domain_name = str(raw_domain["domain"])
         module_name = snake_case(domain_name)
         output = destination / f"{module_name}.py"
-        output.write_text(generate_domain(raw_domain), encoding="utf-8", newline="\n")
+        generated[output] = generate_domain(raw_domain)
         expected.add(output)
         type_names = {str(item["id"]) for item in object_list(raw_domain, "types")}
         class_name = (
             f"{domain_name}Domain" if domain_name in type_names else domain_name
         )
         registry.append((domain_name, module_name, class_name))
-    for old_module in destination.glob("*.py"):
-        if old_module.name != "__init__.py" and old_module not in expected:
-            old_module.unlink()
     init_lines = [
         '"""Generated CDP domain registry. Do not edit manually."""',
         "",
@@ -502,12 +500,19 @@ def generate(protocol_path: Path, package_path: Path) -> None:
     for domain_name, _module_name, class_name in registry:
         hint_lines.append(f"    {domain_name}: {class_name}")
     hint_lines.append("")
+    for output, content in generated.items():
+        output.write_text(content, encoding="utf-8", newline="\n")
+    for old_module in destination.glob("*.py"):
+        if old_module.name != "__init__.py" and old_module not in expected:
+            old_module.unlink()
     (package_path / "_domain_hints.py").write_text(
         "\n".join(hint_lines),
         encoding="utf-8",
         newline="\n",
     )
-    shutil.copyfile(protocol_path, package_path / "protocol.json")
+    package_protocol = package_path / "protocol.json"
+    if protocol_path.resolve() != package_protocol.resolve():
+        shutil.copyfile(protocol_path, package_protocol)
     ruff = Path(sys.executable).with_name(
         "ruff.exe" if sys.platform == "win32" else "ruff"
     )

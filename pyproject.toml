@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chrome-remote-interface"
-version = "1.0.0"
+version = "1.0.1"
 description = "A low-level asynchronous Python client for the Chrome DevTools Protocol"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -44,6 +44,7 @@ cdp = ["protocol.json", "py.typed"]
 pythonVersion = "3.10"
 typeCheckingMode = "strict"
 include = ["."]
+exclude = ["build", "dist", ".venv", "*.egg-info", "**/node_modules", "**/__pycache__", "**/.*"]
 reportMissingTypeStubs = false
 
 [tool.ruff]

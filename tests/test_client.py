@@ -30,6 +30,16 @@ class FakeWebSocket:
         self.closed = True
 
 
+class HangingCloseWebSocket(FakeWebSocket):
+    def __init__(self) -> None:
+        super().__init__()
+        self.close_started = asyncio.Event()
+
+    async def close(self) -> None:
+        self.close_started.set()
+        await asyncio.Future()
+
+
 DESCRIPTOR = cast(
     ProtocolDescriptor,
     {
@@ -132,6 +142,138 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         await self.client.close()
         with self.assertRaises(ConnectionClosedError):
             await self.client.send("Page.enable")
+
+    async def test_close_timeout_does_not_block_cleanup(self) -> None:
+        websocket = HangingCloseWebSocket()
+        client = Client(
+            websocket,
+            "ws://localhost/hanging-close",
+            DESCRIPTOR,
+            close_timeout=0.01,
+        )
+        await asyncio.wait_for(client.close(), timeout=0.2)
+        self.assertTrue(websocket.close_started.is_set())
+        with self.assertRaises(ConnectionClosedError):
+            await client.send("Page.enable")
+
+    async def test_command_timeout_removes_pending_request(self) -> None:
+        client = Client(
+            self.websocket,
+            "ws://localhost/command-timeout",
+            DESCRIPTOR,
+            command_timeout=0.01,
+        )
+        try:
+            with self.assertRaises(asyncio.TimeoutError):
+                await client.send("Page.enable")
+        finally:
+            await client.close()
+
+    async def test_detached_session_removes_listeners_and_waiters(self) -> None:
+        callback_payloads: list[RequestWillBeSentEvent] = []
+        unsubscribe = self.client.Network.requestWillBeSent(
+            callback_payloads.append,
+            session_id="detached-session",
+        )
+        event = self.client.Network.requestWillBeSent(session_id="detached-session")
+        await self.websocket.incoming.put(
+            json.dumps(
+                {
+                    "method": "Target.detachedFromTarget",
+                    "params": {"sessionId": "detached-session"},
+                }
+            )
+        )
+        await asyncio.sleep(0)
+        with self.assertRaises(asyncio.CancelledError):
+            await event
+        await self.websocket.incoming.put(
+            json.dumps(
+                {
+                    "method": "Network.requestWillBeSent",
+                    "params": {"requestId": "ignored"},
+                    "sessionId": "detached-session",
+                }
+            )
+        )
+        await asyncio.sleep(0)
+        self.assertEqual(callback_payloads, [])
+        unsubscribe()
+
+    async def test_cancelling_command_removes_pending_request(self) -> None:
+        command = asyncio.create_task(self.client.send("Page.enable"))
+        await self._sent()
+        command.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await command
+
+    async def test_cancelling_event_wait_unsubscribes(self) -> None:
+        event = self.client.wait_for("Page.loadEventFired")
+        if not isinstance(event, asyncio.Future):
+            self.fail("wait_for must return a Future")
+        event.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await event
+        await asyncio.sleep(0)
+
+    async def test_close_cancels_event_waiters(self) -> None:
+        event = self.client.wait_for("Page.loadEventFired")
+        await self.client.close()
+        with self.assertRaises(asyncio.CancelledError):
+            await event
+
+    async def test_async_callback_failure_is_reported(self) -> None:
+        errors: list[dict[str, object]] = []
+        loop = asyncio.get_running_loop()
+        previous_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: errors.append(context))
+
+        async def callback(_payload: JsonObject) -> None:
+            raise RuntimeError("callback failed")
+
+        unsubscribe = self.client.on_event("Page.loadEventFired", callback)
+        try:
+            await self.websocket.incoming.put(
+                json.dumps({"method": "Page.loadEventFired", "params": {}})
+            )
+            for _ in range(3):
+                await asyncio.sleep(0)
+            self.assertTrue(
+                any(
+                    context.get("message")
+                    == "Unhandled exception in CDP async event callback"
+                    for context in errors
+                )
+            )
+        finally:
+            unsubscribe()
+            loop.set_exception_handler(previous_handler)
+
+    async def test_malformed_message_closes_connection_and_fails_pending(self) -> None:
+        loop = asyncio.get_running_loop()
+        previous_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, _context: None)
+        command = asyncio.create_task(self.client.send("Page.enable"))
+        waiter = self.client.wait_for("Page.loadEventFired")
+        try:
+            await self._sent()
+            await self.websocket.incoming.put("[]")
+            with self.assertRaises(ConnectionClosedError):
+                await command
+            with self.assertRaises(asyncio.CancelledError):
+                await waiter
+            self.assertTrue(self.websocket.closed)
+        finally:
+            loop.set_exception_handler(previous_handler)
+
+    async def test_invalid_command_result_fails_only_that_command(self) -> None:
+        command = asyncio.create_task(self.client.send("Page.enable"))
+        request = await self._sent()
+        await self.websocket.incoming.put(
+            json.dumps({"id": request["id"], "result": []})
+        )
+        with self.assertRaisesRegex(ValueError, "result must be a JSON object"):
+            await command
 
     async def test_remote_protocol_additions_are_available_dynamically(self) -> None:
         await self.client.close()

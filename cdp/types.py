@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping
 from typing import TypeAlias, cast
 
@@ -15,7 +16,11 @@ JsonObject: TypeAlias = dict[str, JsonValue]
 def to_json_value(value: object) -> JsonValue:
     """Validate and normalize a value for JSON/CDP serialization."""
 
-    if value is None or isinstance(value, bool | int | float | str):
+    if value is None or isinstance(value, bool | int | str):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("JSON numbers must be finite")
         return value
     if isinstance(value, list):
         return [to_json_value(item) for item in cast(list[object], value)]

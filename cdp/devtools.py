@@ -108,7 +108,10 @@ def _request_sync(path: str, options: Mapping[str, object]) -> bytes:
         with urlopen(request, timeout=timeout, context=context) as response:
             return response.read()
     except HTTPError as error:
-        body = error.read().decode("utf-8", errors="replace")
+        try:
+            body = error.read().decode("utf-8", errors="replace")
+        finally:
+            error.close()
         raise RuntimeError(body or str(error)) from error
 
 

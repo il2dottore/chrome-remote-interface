@@ -69,6 +69,28 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+`connect()` applies its `timeout` to discovery and the WebSocket handshake.
+For long-running commands, set `command_timeout` to bound how long a command
+may wait for a response. A timed-out command is cancelled and removed from the
+pending-request table:
+
+```python
+client = await connect(command_timeout=10)
+try:
+    await client.Page.enable()
+finally:
+    await client.close()
+```
+
+The connection close handshake is bounded by `close_timeout` (five seconds by
+default). You can also use the async context manager to guarantee cleanup:
+
+```python
+client = await connect()
+async with client:
+    await client.Page.enable()
+```
+
 Every command can use keyword arguments or a parameter mapping. Generated
 domain methods return typed dictionaries, so editors can provide completion
 and report incorrect fields before runtime.
@@ -91,6 +113,10 @@ await client.Network.enable()
 # Later:
 unsubscribe()
 ```
+
+Listeners registered with a `session_id` are removed automatically when Chrome
+emits `Target.detachedFromTarget`. They can also be removed explicitly with
+`client.remove_session_listeners(session_id)`.
 
 CDP values can be optional according to the protocol schema. Narrow them
 before indexing them:

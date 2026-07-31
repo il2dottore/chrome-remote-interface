@@ -55,12 +55,18 @@ async def _inspect(arguments: argparse.Namespace) -> None:
         local=arguments.local,
         protocol=descriptor,
     )
-    namespace = {
-        name: getattr(client, name) for name in vars(client) if name[:1].isupper()
-    }
-    namespace["client"] = client
-    print("Connected. CDP domains and `client` are available; awaitables are awaited.")
-    compiler = codeop.CommandCompiler()
+    try:
+        namespace = {
+            name: getattr(client, name) for name in vars(client) if name[:1].isupper()
+        }
+        namespace["client"] = client
+        print(
+            "Connected. CDP domains and `client` are available; awaitables are awaited."
+        )
+        compiler = codeop.CommandCompiler()
+    except BaseException:
+        await client.close()
+        raise
     try:
         while True:
             try:
