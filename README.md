@@ -1,0 +1,219 @@
+# chrome-remote-interface
+
+`chrome-remote-interface` is a low-level, asynchronous Python client for the
+[Chrome DevTools Protocol (CDP)](https://chromedevtools.github.io/devtools-protocol/).
+It is a Python port of the Node.js
+[chrome-remote-interface](https://github.com/cyrus-and/chrome-remote-interface)
+package.
+
+The library gives you direct access to Chrome and Chromium debugging domains
+over WebSocket. It intentionally stays close to CDP: it does not add browser
+automation concepts such as locators, page objects, or selectors.
+
+## Features
+
+- Async WebSocket client built for `asyncio`.
+- One generated, typed Python module for every CDP domain.
+- Typed commands, parameters, results, events, payloads, aliases, and enums.
+- Event listeners with either callbacks or awaitable one-shot waits.
+- Flattened CDP sessions through the `session_id` argument.
+- Chrome discovery helpers compatible with the Node.js package.
+- Raw `client.send(...)` access for protocol additions not in the bundled schema.
+- Command-line tools for listing targets, creating targets, and inspecting a
+  running browser.
+
+## Requirements
+
+- Python 3.10 or newer.
+- Chrome or Chromium started with remote debugging enabled.
+
+Install the package from PyPI:
+
+```console
+python -m pip install chrome-remote-interface
+```
+
+Start a debugging browser on the default endpoint (`localhost:9222`):
+
+```console
+chrome --remote-debugging-port=9222
+```
+
+For a separate profile, add `--user-data-dir` so that the command can run next
+to an existing Chrome instance. See [`examples/README.md`](examples/README.md)
+for a complete setup and runnable examples.
+
+## Quick start
+
+The package is installed as `chrome-remote-interface` but imported as `cdp`:
+
+```python
+import asyncio
+
+from cdp import connect
+
+
+async def main() -> None:
+    client = await connect()
+    try:
+        await client.Page.enable()
+
+        loaded = client.Page.loadEventFired()
+        navigation = await client.Page.navigate(url="https://example.com")
+        await loaded
+        print(f"Loaded frame: {navigation['frameId']}")
+    finally:
+        await client.close()
+
+
+asyncio.run(main())
+```
+
+Every command can use keyword arguments or a parameter mapping. Generated
+domain methods return typed dictionaries, so editors can provide completion
+and report incorrect fields before runtime.
+
+## Events and JavaScript
+
+Subscribe to a typed event with a callback and keep the unsubscribe function:
+
+```python
+from cdp.domains.network import RequestWillBeSentEvent
+
+
+def on_request(event: RequestWillBeSentEvent) -> None:
+    print(event["request"]["url"])
+
+
+unsubscribe = client.Network.requestWillBeSent(on_request)
+await client.Network.enable()
+
+# Later:
+unsubscribe()
+```
+
+CDP values can be optional according to the protocol schema. Narrow them
+before indexing them:
+
+```python
+result = await client.Runtime.evaluate(
+    expression="document.title",
+    returnByValue=True,
+)
+remote_object = result["result"]
+if "value" in remote_object:
+    print(remote_object["value"])
+```
+
+## Targets and sessions
+
+The HTTP helpers can list inspectable targets and connect to a specific page:
+
+```python
+from cdp import List, connect
+
+
+targets = await List()
+page = next(target for target in targets if target["type"] == "page")
+client = await connect(page["id"])
+```
+
+For browser-level connections, attach to a target and pass its session ID to
+subsequent domain commands:
+
+```python
+from cdp import Version, connect
+
+
+version = await Version()
+browser = await connect(version["webSocketDebuggerUrl"])
+created = await browser.Target.createTarget(url="about:blank")
+attached = await browser.Target.attachToTarget(
+    targetId=created["targetId"],
+    flatten=True,
+)
+await browser.Page.enable(session_id=attached["sessionId"])
+```
+
+## Discovery helpers
+
+The following async helpers use Chrome's `/json` endpoints and default to
+`localhost:9222`:
+
+| Helper | Purpose |
+| --- | --- |
+| `Version()` | Browser version and browser WebSocket URL |
+| `List()` | List inspectable targets |
+| `New()` | Create a new target |
+| `Activate()` | Activate a target |
+| `Close()` | Close a target |
+| `Protocol()` | Fetch the browser's protocol descriptor |
+
+Each helper accepts options such as `host`, `port`, `secure`, and `timeout`.
+The Node-compatible aliases (`Chrome`, `CDP`, `list_targets`, and so on) are
+also exported.
+
+## Generated CDP domains
+
+The bundled schema is
+[`chrome-remote-interface/lib/protocol.json`](chrome-remote-interface/lib/protocol.json).
+Each domain is generated into its own module under [`cdp/domains/`](cdp/domains/):
+
+```python
+from cdp.domains.page import NavigateParameters, NavigateResult
+from cdp.domains.runtime import RemoteObject
+```
+
+Regenerate the modules after updating the schema:
+
+```console
+python tools/generate_domains.py
+```
+
+`tools/generate_stubs.py` remains available as a compatibility entry point.
+When a connected browser advertises newer protocol members, use
+`client.send("Domain.command", ...)` as a typed-safe raw fallback.
+
+## Examples
+
+The [`examples/`](examples/) directory contains small, runnable programs:
+
+- `basic_navigation.py` — `Page.enable`, `Page.navigate`, and load events.
+- `evaluate.py` — `Runtime.evaluate` and optional result values.
+- `network_events.py` — typed `Network` request events.
+- `target_sessions.py` — `Target` creation, attachment, and sessions.
+
+Run them from the repository root with:
+
+```console
+python -m examples.basic_navigation
+```
+
+## Command-line interface
+
+The package also installs a `chrome-remote-interface` command:
+
+```console
+chrome-remote-interface list
+chrome-remote-interface new https://example.com
+chrome-remote-interface protocol --local
+chrome-remote-interface inspect
+```
+
+## Development
+
+Install development dependencies and run the full validation suite:
+
+```console
+python -m pip install -e ".[dev]"
+python tools/generate_domains.py
+python -m unittest discover -s tests
+ruff format --check .
+ruff check .
+pyright
+python -m build
+```
+
+## License
+
+This project is distributed under the [MIT License](LICENSE).

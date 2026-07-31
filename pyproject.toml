@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chrome-remote-interface"
+version = "1.0.0"
+description = "A low-level asynchronous Python client for the Chrome DevTools Protocol"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+keywords = ["chrome", "chromium", "cdp", "devtools", "protocol"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Framework :: AsyncIO",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed",
+]
+dependencies = ["typing_extensions>=4.12", "websockets>=12,<17"]
+
+[project.scripts]
+chrome-remote-interface = "cdp.cli:main"
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2",
+  "pyright>=1.1.390",
+  "ruff>=0.9",
+]
+
+[tool.setuptools.packages.find]
+include = ["cdp*"]
+
+[tool.setuptools.package-data]
+cdp = ["protocol.json", "py.typed"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "strict"
+include = ["."]
+reportMissingTypeStubs = false
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+# Protocol stubs are generated from the CDP schema; their long declarations
+# and functional TypedDict definitions preserve generated API fidelity.
+"cdp/domains/*.py" = ["E501", "I001", "UP013", "UP035"]
+"tests/*.py" = ["ASYNC110"]
+"tools/*.py" = ["E501"]

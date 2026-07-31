@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pyright/
+.ruff_cache/
+.venv/
+build/
+dist/
+*.egg-info/
+AGENTS.md
+must-avoid
+chrome-remote-interface
