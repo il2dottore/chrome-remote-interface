@@ -43,6 +43,24 @@ For a separate profile, add `--user-data-dir` so that the command can run next
 to an existing Chrome instance. See [`examples/README.md`](examples/README.md)
 for a complete setup and runnable examples.
 
+## Publishing a release
+
+The workflow in [`.github/workflows/publish.yml`](.github/workflows/publish.yml)
+validates and publishes a package to PyPI whenever a tag matching `v*` is
+pushed. It uses PyPI Trusted Publishing (GitHub Actions OIDC), so no API token
+is stored in the repository.
+
+Before the first release, configure a PyPI Trusted Publisher for this GitHub
+repository with workflow `publish.yml` and environment `pypi`. Then bump the
+version in `pyproject.toml`, commit it, and push a matching unique tag:
+
+```console
+git tag v1.0.2
+git push origin v1.0.2
+```
+
+The workflow rejects tags whose version does not match `pyproject.toml`.
+
 ## Quick start
 
 The package is installed as `chrome-remote-interface` but imported as `cdp`:
