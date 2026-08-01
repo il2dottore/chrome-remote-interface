@@ -202,12 +202,15 @@ Invoke-WebRequest `
     -OutFile chrome-remote-interface/lib/protocol.json
 ```
 
-Or, from Git Bash, run the repository's update script to fetch and merge the
-latest upstream schema used by the original Node.js project:
+Or run the repository's Python update script to fetch and merge the latest
+upstream schema used by the original Node.js project:
 
-```bash
-bash scripts/update-protocol.sh
+```powershell
+python scripts/update_protocol.py
 ```
+
+The base URL can be overridden with `CDP_PROTOCOL_BASE_URL` or the
+`--base-url` option.
 
 The script writes the source descriptor and regenerates the Python bindings
 automatically. If you only replace the source file manually, regenerate from

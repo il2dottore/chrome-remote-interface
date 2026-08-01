@@ -45,8 +45,6 @@ LoaderId: TypeAlias = str
 
 RequestId: TypeAlias = str
 
-InterceptionId: TypeAlias = str
-
 ErrorReason: TypeAlias = Literal[
     "Failed",
     "Aborted",
@@ -474,15 +472,6 @@ class AuthChallengeResponse(TypedDict):
     password: NotRequired[str]
 
 
-InterceptionStage: TypeAlias = Literal["Request", "HeadersReceived"]
-
-
-class RequestPattern(TypedDict):
-    urlPattern: NotRequired[str]
-    resourceType: NotRequired[ResourceType]
-    interceptionStage: NotRequired[InterceptionStage]
-
-
 class SignedExchangeSignature(TypedDict):
     label: str
     signature: str
@@ -891,17 +880,6 @@ class CanEmulateNetworkConditionsResult(TypedDict):
     result: bool
 
 
-class ContinueInterceptedRequestParameters(TypedDict):
-    interceptionId: InterceptionId
-    errorReason: NotRequired[ErrorReason]
-    rawResponse: NotRequired[str]
-    url: NotRequired[str]
-    method: NotRequired[str]
-    postData: NotRequired[str]
-    headers: NotRequired[Headers]
-    authChallengeResponse: NotRequired[AuthChallengeResponse]
-
-
 class DeleteCookiesParameters(TypedDict):
     name: str
     url: NotRequired[str]
@@ -990,23 +968,6 @@ class GetRequestPostDataResult(TypedDict):
     base64Encoded: bool
 
 
-class GetResponseBodyForInterceptionParameters(TypedDict):
-    interceptionId: InterceptionId
-
-
-class GetResponseBodyForInterceptionResult(TypedDict):
-    body: str
-    base64Encoded: bool
-
-
-class TakeResponseBodyForInterceptionAsStreamParameters(TypedDict):
-    interceptionId: InterceptionId
-
-
-class TakeResponseBodyForInterceptionAsStreamResult(TypedDict):
-    stream: IO.StreamHandle
-
-
 class ReplayXHRParameters(TypedDict):
     requestId: RequestId
 
@@ -1065,10 +1026,6 @@ class SetExtraHTTPHeadersParameters(TypedDict):
 
 class SetAttachDebugStackParameters(TypedDict):
     enabled: bool
-
-
-class SetRequestInterceptionParameters(TypedDict):
-    patterns: list[RequestPattern]
 
 
 class SetUserAgentOverrideParameters(TypedDict):
@@ -1158,21 +1115,6 @@ class LoadingFinishedEvent(TypedDict):
     requestId: RequestId
     timestamp: MonotonicTime
     encodedDataLength: float
-
-
-class RequestInterceptedEvent(TypedDict):
-    interceptionId: InterceptionId
-    request: Request
-    frameId: Page.FrameId
-    resourceType: ResourceType
-    isNavigationRequest: bool
-    isDownload: NotRequired[bool]
-    redirectUrl: NotRequired[str]
-    authChallenge: NotRequired[AuthChallenge]
-    responseErrorReason: NotRequired[ErrorReason]
-    responseStatusCode: NotRequired[int]
-    responseHeaders: NotRequired[Headers]
-    requestId: NotRequired[RequestId]
 
 
 class RequestServedFromCacheEvent(TypedDict):
@@ -1295,7 +1237,7 @@ class DirectTCPSocketOpenedEvent(TypedDict):
 
 class DirectTCPSocketAbortedEvent(TypedDict):
     identifier: RequestId
-    errorMessage: str
+    errorMessage: ErrorReason
     timestamp: MonotonicTime
 
 
@@ -1344,7 +1286,7 @@ class DirectUDPSocketOpenedEvent(TypedDict):
 
 class DirectUDPSocketAbortedEvent(TypedDict):
     identifier: RequestId
-    errorMessage: str
+    errorMessage: ErrorReason
     timestamp: MonotonicTime
 
 
@@ -1532,33 +1474,6 @@ class Network(BaseDomain):
         """Clears browser cookies."""
 
         return await self._command("clearBrowserCookies", None, session_id, {})
-
-    @overload
-    async def continueInterceptedRequest(
-        self,
-        params: ContinueInterceptedRequestParameters,
-        session_id: str | None = None,
-    ) -> JsonObject: ...
-
-    @overload
-    async def continueInterceptedRequest(
-        self,
-        params: str | None = None,
-        session_id: str | None = None,
-        **kwargs: Unpack[ContinueInterceptedRequestParameters],
-    ) -> JsonObject: ...
-
-    async def continueInterceptedRequest(
-        self,
-        params: Mapping[str, object] | str | None = None,
-        session_id: str | None = None,
-        **kwargs: object,
-    ) -> JsonObject:
-        """Response to Network.requestIntercepted which either modifies the request to continue with any modifications, or blocks it, or completes it with the provided response bytes. If a network fetch occurs as a result which encounters a redirect an additional Network.requestIntercepted event will be sent with the same InterceptionId. Deprecated, use Fetch.continueRequest, Fetch.fulfillRequest and Fetch.failRequest instead."""
-
-        return await self._command(
-            "continueInterceptedRequest", params, session_id, kwargs
-        )
 
     @overload
     async def deleteCookies(
@@ -1851,66 +1766,6 @@ class Network(BaseDomain):
         )
 
     @overload
-    async def getResponseBodyForInterception(
-        self,
-        params: GetResponseBodyForInterceptionParameters,
-        session_id: str | None = None,
-    ) -> GetResponseBodyForInterceptionResult: ...
-
-    @overload
-    async def getResponseBodyForInterception(
-        self,
-        params: str | None = None,
-        session_id: str | None = None,
-        **kwargs: Unpack[GetResponseBodyForInterceptionParameters],
-    ) -> GetResponseBodyForInterceptionResult: ...
-
-    async def getResponseBodyForInterception(
-        self,
-        params: Mapping[str, object] | str | None = None,
-        session_id: str | None = None,
-        **kwargs: object,
-    ) -> GetResponseBodyForInterceptionResult:
-        """Returns content served for the given currently intercepted request."""
-
-        return cast(
-            GetResponseBodyForInterceptionResult,
-            await self._command(
-                "getResponseBodyForInterception", params, session_id, kwargs
-            ),
-        )
-
-    @overload
-    async def takeResponseBodyForInterceptionAsStream(
-        self,
-        params: TakeResponseBodyForInterceptionAsStreamParameters,
-        session_id: str | None = None,
-    ) -> TakeResponseBodyForInterceptionAsStreamResult: ...
-
-    @overload
-    async def takeResponseBodyForInterceptionAsStream(
-        self,
-        params: str | None = None,
-        session_id: str | None = None,
-        **kwargs: Unpack[TakeResponseBodyForInterceptionAsStreamParameters],
-    ) -> TakeResponseBodyForInterceptionAsStreamResult: ...
-
-    async def takeResponseBodyForInterceptionAsStream(
-        self,
-        params: Mapping[str, object] | str | None = None,
-        session_id: str | None = None,
-        **kwargs: object,
-    ) -> TakeResponseBodyForInterceptionAsStreamResult:
-        """Returns a handle to the stream representing the response body. Note that after this command, the intercepted request can't be continued as is -- you either need to cancel it or to provide the response body. The stream only supports sequential read, IO.read will fail if the position is specified."""
-
-        return cast(
-            TakeResponseBodyForInterceptionAsStreamResult,
-            await self._command(
-                "takeResponseBodyForInterceptionAsStream", params, session_id, kwargs
-            ),
-        )
-
-    @overload
     async def replayXHR(
         self,
         params: ReplayXHRParameters,
@@ -2140,31 +1995,6 @@ class Network(BaseDomain):
         """Specifies whether to attach a page script stack id in requests"""
 
         return await self._command("setAttachDebugStack", params, session_id, kwargs)
-
-    @overload
-    async def setRequestInterception(
-        self,
-        params: SetRequestInterceptionParameters,
-        session_id: str | None = None,
-    ) -> JsonObject: ...
-
-    @overload
-    async def setRequestInterception(
-        self,
-        params: str | None = None,
-        session_id: str | None = None,
-        **kwargs: Unpack[SetRequestInterceptionParameters],
-    ) -> JsonObject: ...
-
-    async def setRequestInterception(
-        self,
-        params: Mapping[str, object] | str | None = None,
-        session_id: str | None = None,
-        **kwargs: object,
-    ) -> JsonObject:
-        """Sets the requests to intercept that match the provided patterns and optionally resource types. Deprecated, please use Fetch.enable instead."""
-
-        return await self._command("setRequestInterception", params, session_id, kwargs)
 
     @overload
     async def setUserAgentOverride(
@@ -2598,55 +2428,6 @@ class Network(BaseDomain):
             Awaitable[LoadingFinishedEvent] | Unsubscribe,
             self._event(
                 "loadingFinished",
-                cast(
-                    EventCallback[Mapping[str, object]] | str | None,
-                    callback_or_session,
-                ),
-                cast(EventCallback[Mapping[str, object]] | None, handler),
-                session_id,
-            ),
-        )
-
-    @overload
-    def requestIntercepted(
-        self,
-        callback_or_session: EventCallback[RequestInterceptedEvent],
-        handler: None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Unsubscribe: ...
-
-    @overload
-    def requestIntercepted(
-        self,
-        callback_or_session: str,
-        handler: EventCallback[RequestInterceptedEvent],
-        *,
-        session_id: str | None = None,
-    ) -> Unsubscribe: ...
-
-    @overload
-    def requestIntercepted(
-        self,
-        callback_or_session: str | None = None,
-        handler: None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Awaitable[RequestInterceptedEvent]: ...
-
-    def requestIntercepted(
-        self,
-        callback_or_session: EventCallback[RequestInterceptedEvent] | str | None = None,
-        handler: EventCallback[RequestInterceptedEvent] | None = None,
-        *,
-        session_id: str | None = None,
-    ) -> Awaitable[RequestInterceptedEvent] | Unsubscribe:
-        """Details of an intercepted HTTP request, which must be either allowed, blocked, modified or mocked. Deprecated, use Fetch.requestPaused instead."""
-
-        return cast(
-            Awaitable[RequestInterceptedEvent] | Unsubscribe,
-            self._event(
-                "requestIntercepted",
                 cast(
                     EventCallback[Mapping[str, object]] | str | None,
                     callback_or_session,
@@ -4651,7 +4432,6 @@ __all__ = [
     "ContentEncoding",
     "ContentSecurityPolicySource",
     "ContentSecurityPolicyStatus",
-    "ContinueInterceptedRequestParameters",
     "Cookie",
     "CookieBlockedReason",
     "CookieExemptionReason",
@@ -4717,8 +4497,6 @@ __all__ = [
     "GetCookiesResult",
     "GetRequestPostDataParameters",
     "GetRequestPostDataResult",
-    "GetResponseBodyForInterceptionParameters",
-    "GetResponseBodyForInterceptionResult",
     "GetResponseBodyParameters",
     "GetResponseBodyResult",
     "GetSecurityIsolationStatusParameters",
@@ -4726,8 +4504,6 @@ __all__ = [
     "Headers",
     "IPAddressSpace",
     "Initiator",
-    "InterceptionId",
-    "InterceptionStage",
     "LoadNetworkResourceOptions",
     "LoadNetworkResourcePageResult",
     "LoadNetworkResourceParameters",
@@ -4753,8 +4529,6 @@ __all__ = [
     "ReportingApiReportUpdatedEvent",
     "Request",
     "RequestId",
-    "RequestInterceptedEvent",
-    "RequestPattern",
     "RequestServedFromCacheEvent",
     "RequestWillBeSentEvent",
     "RequestWillBeSentExtraInfoEvent",
@@ -4784,7 +4558,6 @@ __all__ = [
     "SetCookieResult",
     "SetCookiesParameters",
     "SetExtraHTTPHeadersParameters",
-    "SetRequestInterceptionParameters",
     "SetUserAgentOverrideParameters",
     "SignedCertificateTimestamp",
     "SignedExchangeError",
@@ -4795,8 +4568,6 @@ __all__ = [
     "SignedExchangeSignature",
     "StreamResourceContentParameters",
     "StreamResourceContentResult",
-    "TakeResponseBodyForInterceptionAsStreamParameters",
-    "TakeResponseBodyForInterceptionAsStreamResult",
     "TerminationEventDetails",
     "TimeSinceEpoch",
     "TrustTokenOperationDoneEvent",
