@@ -412,7 +412,6 @@ class FileFilter(TypedDict):
 class FileHandler(TypedDict):
     action: str
     name: str
-    icons: NotRequired[list[ImageResource]]
     accepts: NotRequired[list[FileFilter]]
     launchType: str
 

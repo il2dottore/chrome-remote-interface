@@ -120,6 +120,7 @@ class EvaluateOnCallFrameParameters(TypedDict):
     generatePreview: NotRequired[bool]
     throwOnSideEffect: NotRequired[bool]
     timeout: NotRequired[Runtime.TimeDelta]
+    scopeNumber: NotRequired[int]
 
 
 class EvaluateOnCallFrameResult(TypedDict):

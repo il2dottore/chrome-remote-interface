@@ -45,7 +45,7 @@ class Credential(TypedDict):
     rpId: NotRequired[str]
     privateKey: str
     userHandle: NotRequired[str]
-    signCount: NotRequired[int]
+    signCount: int
     largeBlob: NotRequired[str]
     backupEligibility: NotRequired[bool]
     backupState: NotRequired[bool]

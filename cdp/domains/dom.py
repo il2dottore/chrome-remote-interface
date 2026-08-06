@@ -535,6 +535,11 @@ class ForceShowPopoverResult(TypedDict):
     nodeIds: list[NodeId]
 
 
+class ForceShowInterestParameters(TypedDict):
+    nodeId: NodeId
+    enable: bool
+
+
 class AttributeModifiedEvent(TypedDict):
     nodeId: NodeId
     name: str
@@ -1903,6 +1908,31 @@ class DOM(BaseDomain):
         )
 
     @overload
+    async def forceShowInterest(
+        self,
+        params: ForceShowInterestParameters,
+        session_id: str | None = None,
+    ) -> JsonObject: ...
+
+    @overload
+    async def forceShowInterest(
+        self,
+        params: str | None = None,
+        session_id: str | None = None,
+        **kwargs: Unpack[ForceShowInterestParameters],
+    ) -> JsonObject: ...
+
+    async def forceShowInterest(
+        self,
+        params: Mapping[str, object] | str | None = None,
+        session_id: str | None = None,
+        **kwargs: object,
+    ) -> JsonObject:
+        """When enabling, this API forces an element to gain interest in its target, keeping interest active until disabled."""
+
+        return await self._command("forceShowInterest", params, session_id, kwargs)
+
+    @overload
     def attributeModified(
         self,
         callback_or_session: EventCallback[AttributeModifiedEvent],
@@ -2868,6 +2898,7 @@ __all__ = [
     "DistributedNodesUpdatedEvent",
     "EnableParameters",
     "FocusParameters",
+    "ForceShowInterestParameters",
     "ForceShowPopoverParameters",
     "ForceShowPopoverResult",
     "GetAnchorElementParameters",
